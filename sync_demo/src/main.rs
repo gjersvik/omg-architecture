@@ -1,7 +1,10 @@
 use std::env::{self, Args};
 
+use omg_core::Agency;
+
 fn main() {
-    let _storage = omg_sqlite::file("todo.db");
+    let storage = omg_sqlite::file("todo.db");
+    let _agency = Agency::new(Some(storage));
 
     // Get arguments
     let mut args = env::args();
