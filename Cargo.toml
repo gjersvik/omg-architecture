@@ -2,5 +2,6 @@
 resolver = "2"
 members = [
     "omg_core",
+    "omg_sqlite",
     "sync_demo"
 ]

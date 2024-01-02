@@ -1,6 +1,8 @@
 use std::env::{self, Args};
 
 fn main() {
+    let _storage = omg_sqlite::file("todo.db");
+
     // Get arguments
     let mut args = env::args();
 

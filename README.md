@@ -51,7 +51,6 @@ The omg_sqlite package will implement the storage trait using sqlite.
 * non_blocking_demo Todo app running as egui app.
 
 ## Todo list
-1. Sync demo using a sync only core with a memory only backend.
-1. Sync only version of sqlite backend.
+1. Sync demo using a sync only core with sqlite backend.
 1. Async demo with async supported framework and backend.
 1. Non-blocking demo with non-blocking supported framework and backend.
