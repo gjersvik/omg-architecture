@@ -58,6 +58,8 @@ fn add(mut args: Args, mut agent: Agent<u64, String>) {
     }
 }
 
-fn list(_agent: Agent<u64, String>) {
-    todo!("Todo: Implement list")
+fn list(agent: Agent<u64, String>) {
+    for (id, task) in agent.view().iter() {
+        println!("{id}: {task}");
+    }
 }
