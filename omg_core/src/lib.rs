@@ -1,6 +1,8 @@
-use std::{sync::Arc, collections::BTreeMap};
+use std::{collections::BTreeMap, sync::Arc};
 
 pub trait Storage: Send + Sync {}
+pub trait Key: Ord {}
+impl<T: Ord> Key for T {}
 
 pub struct Agency {
     _storage: Option<Arc<dyn Storage>>,
@@ -13,12 +15,23 @@ impl Agency {
         }
     }
 
-    pub fn load_blocking<K,V>(&self, _name: &str) -> Agent<K,V> {
-        Agent { _view: BTreeMap::new() }
+    pub fn load_blocking<K: Key, V>(&self, _name: &str) -> Agent<K, V> {
+        Agent {
+            view: BTreeMap::new(),
+        }
     }
 }
 
-pub struct Agent<K,V> {
-    _view: BTreeMap<K,V>
+pub struct Agent<K: Key, V> {
+    view: BTreeMap<K, V>,
 }
 
+impl<K: Key, V> Agent<K, V> {
+    pub fn view(&self) -> &BTreeMap<K, V> {
+        &self.view
+    }
+
+    pub fn insert_blocking(&mut self, key: K, value: V) {
+        self.view.insert(key, value);
+    }
+}

@@ -36,9 +36,15 @@ fn remove(_args: Args, _agent: Agent<u64, String>) {
     todo!("Todo: Implement remove")
 }
 
-fn add(mut args: Args, _agent: Agent<u64, String>) {
-    if let Some(_task) = args.next() {
-        todo!("Todo: Implement add")
+fn add(mut args: Args, mut agent: Agent<u64, String>) {
+    if let Some(task) = args.next() {
+        let next_id = agent
+            .view()
+            .last_key_value()
+            .map(|(id, _)| *id + 1)
+            .unwrap_or(1);
+        agent.insert_blocking(next_id, task.clone());
+        println!("Added {task} with id {next_id}")
     } else {
         println!("No task was provided. sync_demo add [task]")
     }
