@@ -36,8 +36,12 @@ fn remove(_args: Args, _agent: Agent) {
     todo!("Todo: Implement remove")
 }
 
-fn add(_args: Args, _agent: Agent) {
-    todo!("Todo: Implement add")
+fn add(mut args: Args, _agent: Agent) {
+    if let Some(_task) = args.next() {
+        todo!("Todo: Implement add")
+    } else {
+        println!("No task was provided. sync_demo add [task]")
+    }
 }
 
 fn list(_agent: Agent) {
