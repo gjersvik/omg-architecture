@@ -1,7 +1,7 @@
 use omg_core::Storage;
 
-pub fn file(_path: &str) -> Box<dyn Storage> {
-    Box::new(SqliteBackend{})
+pub fn file(_path: &str) -> Result<Box<dyn Storage>, String> {
+    Ok(Box::new(SqliteBackend{}))
 }
 
 struct SqliteBackend {

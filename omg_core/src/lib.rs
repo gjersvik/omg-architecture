@@ -15,7 +15,7 @@ impl Agency {
         }
     }
 
-    pub fn load_blocking<K: Key, V>(&self, _name: &str) -> Agent<K, V> {
+    pub fn get<K: Key, V>(&self, _name: &str) -> Agent<K, V> {
         Agent {
             view: BTreeMap::new(),
         }
@@ -27,15 +27,16 @@ pub struct Agent<K: Key, V> {
 }
 
 impl<K: Key, V> Agent<K, V> {
-    pub fn view(&self) -> &BTreeMap<K, V> {
-        &self.view
+    pub fn load_blocking(&self) -> Result<&BTreeMap<K, V>, String> {
+        Ok(&self.view)
     }
 
-    pub fn insert_blocking(&mut self, key: K, value: V) {
+    pub fn insert_blocking(&mut self, key: K, value: V) -> Result<(), String> {
         self.view.insert(key, value);
+        Ok(())
     }
 
-    pub fn remove_blocking(&mut self, key: &K) -> Option<V> {
-        self.view.remove(key)
+    pub fn remove_blocking(&mut self, key: &K) -> Result<Option<V>, String> {
+        Ok(self.view.remove(key))
     }
 }
