@@ -4,7 +4,8 @@ use omg_core::Agency;
 
 fn main() {
     let storage = omg_sqlite::file("todo.db");
-    let _agency = Agency::new(Some(storage));
+    let agency = Agency::new(Some(storage));
+    let _todo = agency.load_blocking("todo");
 
     // Get arguments
     let mut args = env::args();
