@@ -32,11 +32,11 @@ fn help() {
     println!("Removes/completes the task with id: id.");
 }
 
-fn remove(_args: Args, _agent: Agent) {
+fn remove(_args: Args, _agent: Agent<u64, String>) {
     todo!("Todo: Implement remove")
 }
 
-fn add(mut args: Args, _agent: Agent) {
+fn add(mut args: Args, _agent: Agent<u64, String>) {
     if let Some(_task) = args.next() {
         todo!("Todo: Implement add")
     } else {
@@ -44,6 +44,6 @@ fn add(mut args: Args, _agent: Agent) {
     }
 }
 
-fn list(_agent: Agent) {
+fn list(_agent: Agent<u64, String>) {
     todo!("Todo: Implement list")
 }

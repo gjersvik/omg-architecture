@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, collections::BTreeMap};
 
 pub trait Storage: Send + Sync {}
 
@@ -13,9 +13,12 @@ impl Agency {
         }
     }
 
-    pub fn load_blocking(&self, _name: &str) -> Agent {
-        Agent {}
+    pub fn load_blocking<K,V>(&self, _name: &str) -> Agent<K,V> {
+        Agent { _view: BTreeMap::new() }
     }
 }
 
-pub struct Agent {}
+pub struct Agent<K,V> {
+    _view: BTreeMap<K,V>
+}
+
