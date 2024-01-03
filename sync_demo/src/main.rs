@@ -32,8 +32,16 @@ fn help() {
     println!("Removes/completes the task with id: id.");
 }
 
-fn remove(_args: Args, _agent: Agent<u64, String>) {
-    todo!("Todo: Implement remove")
+fn remove(mut args: Args, mut agent: Agent<u64, String>) {
+    if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
+        if let Some(task) = agent.remove_blocking(&id) {
+            println!("Removed {task} with id {id}")
+        } else {
+            println!("Task with id {id} not found. Nothing to remove.")
+        }
+    } else {
+        println!("No task was provided. sync_demo remove [task]")
+    }
 }
 
 fn add(mut args: Args, mut agent: Agent<u64, String>) {

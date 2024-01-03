@@ -34,4 +34,8 @@ impl<K: Key, V> Agent<K, V> {
     pub fn insert_blocking(&mut self, key: K, value: V) {
         self.view.insert(key, value);
     }
+
+    pub fn remove_blocking(&mut self, key: &K) -> Option<V> {
+        self.view.remove(key)
+    }
 }
