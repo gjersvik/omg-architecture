@@ -1,7 +1,8 @@
 #![no_std]
 extern crate alloc;
 
-use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
+use serde::{Deserialize, Serialize};
 
 pub trait Storage: Send + Sync {}
 pub trait Key: Ord {}
@@ -25,6 +26,19 @@ impl Agency {
 
 struct AgencyOffice {
     _storage: Option<Box<dyn Storage>>,
+}
+
+pub trait State
+where
+    Self: Sized,
+    for<'a> Self::PersistanceMsg: Deserialize<'a>,
+    Self::PersistanceMsg: Serialize,
+{
+    type Msg;
+    type PersistanceMsg;
+
+    fn apply(self, msg: Self::Msg) -> (Self, Vec<Self::PersistanceMsg>);
+    fn restore(self, msg: Self::PersistanceMsg) -> Self;
 }
 
 pub struct Agent<K: Key, V> {
