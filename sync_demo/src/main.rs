@@ -11,7 +11,7 @@ fn main() {
     let agency = Agency::new(Some(storage));
 
     // Get or create an agent we will use for this todo app. 
-    let todo = agency.get("todo");
+    let todo = agency.agent("todo");
 
     // Get arguments
     let mut args = env::args();

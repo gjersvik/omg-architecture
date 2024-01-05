@@ -18,8 +18,8 @@ impl Agency {
         }
     }
 
-    pub fn get<K: Key, V>(&self, _name: &str) -> Agent<K, V> {
-        todo!("Implement: Agency::get")
+    pub fn agent<K: Key, V>(&self, _name: &str) -> Agent<K, V> {
+        todo!("Implement: Agency::agent")
     }
 }
 
