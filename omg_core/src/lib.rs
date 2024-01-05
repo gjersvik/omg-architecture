@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, sync::Arc};
+#![no_std]
+extern crate alloc;
+
+use alloc::{collections::BTreeMap, sync::Arc, boxed::Box, string::String};
 
 pub trait Storage: Send + Sync {}
 pub trait Key: Ord {}
