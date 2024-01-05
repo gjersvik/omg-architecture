@@ -1,24 +1,30 @@
 #![no_std]
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, sync::Arc, boxed::Box, string::String};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc};
 
 pub trait Storage: Send + Sync {}
 pub trait Key: Ord {}
 impl<T: Ord> Key for T {}
 
 pub struct Agency {
-    _storage: Option<Arc<dyn Storage>>,
+    _office: Arc<AgencyOffice>,
 }
 
 impl Agency {
-    pub fn new(_storage: Option<Box<dyn Storage>>) -> Agency {
-        todo!("Implement: Agency::new")
+    pub fn new(storage: Option<Box<dyn Storage>>) -> Agency {
+        Agency {
+            _office: Arc::new(AgencyOffice { _storage: storage }),
+        }
     }
 
     pub fn get<K: Key, V>(&self, _name: &str) -> Agent<K, V> {
         todo!("Implement: Agency::get")
     }
+}
+
+struct AgencyOffice {
+    _storage: Option<Box<dyn Storage>>,
 }
 
 pub struct Agent<K: Key, V> {
