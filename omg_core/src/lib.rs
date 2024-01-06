@@ -14,6 +14,7 @@ pub struct Message {
 
 pub trait Storage: Send + Sync {
     fn append_blocking(&self, topic: &str, created: Option<OffsetDateTime>, data: &Value) -> Result<(), Box<dyn Error>>;
+    fn read_all(&self, topic: &str) -> Result<Vec<Message>, Box<dyn Error>>;
 }
 pub trait Key: Ord {}
 impl<T: Ord> Key for T {}

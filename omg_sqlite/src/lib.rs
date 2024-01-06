@@ -16,4 +16,8 @@ impl Storage for SqliteBackend {
     fn append_blocking(&self, _topic: &str, _created: Option<OffsetDateTime>, _data: &Value) -> Result<(), Box<dyn Error>> {
         todo!()
     }
+
+    fn read_all(&self, _topic: &str) -> Result<Vec<omg_core::Message>, Box<dyn Error>> {
+        todo!()
+    }
 }
