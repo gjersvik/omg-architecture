@@ -10,7 +10,7 @@ use time::OffsetDateTime;
 fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
     // In this case we device to use Sqlite as backed and configure it with what file to use.
-    let storage = omg_sqlite::file("todo.db").unwrap();
+    let storage = omg_sqlite::file_blocking("todo.db").unwrap();
 
     // Get arguments
     let mut args = env::args();
