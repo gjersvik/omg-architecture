@@ -4,19 +4,13 @@ use std::{
     error::Error,
 };
 
-use omg_core::{Agency, Agent, Storage};
+use omg_core::Storage;
 use time::OffsetDateTime;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
     // In this case we device to use Sqlite as backed and configure it with what file to use.
     let storage = omg_sqlite::file("todo.db").unwrap();
-
-    // Once we have configured all the parts we create the Agency we will use for the rest of application.
-    let agency = Agency::new(None);
-
-    // Get or create an agent we will use for this todo app.
-    let todo = agency.agent("todo");
 
     // Get arguments
     let mut args = env::args();
@@ -28,10 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match args.next().as_deref() {
         Some("list") => list(storage.as_ref()),
         Some("add") => add(args, storage.as_ref()),
-        Some("remove") => {
-            remove(args, todo);
-            Ok(())
-        }
+        Some("remove") => remove(args, storage.as_ref()),
         _ => {
             help();
             Ok(())
@@ -51,17 +42,19 @@ fn help() {
     println!("Removes/completes the task with id: id.");
 }
 
-fn remove(mut args: Args, mut agent: Agent<u64, String>) {
+fn remove(mut args: Args, storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
     if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
         // There we use the blocking version of the remove api. The change will be persisted before return.
-        if let Some(task) = agent.remove_blocking(&id).unwrap() {
-            println!("Removed {task} with id {id}")
-        } else {
-            println!("Task with id {id} not found. Nothing to remove.")
-        }
+        storage.append_blocking(
+            "todo",
+            Some(OffsetDateTime::now_utc()),
+            serde_json::to_value((id, None::<String>))?,
+        )?;
+        println!("Removed task with id {id}")
     } else {
         println!("No task was provided. sync_demo remove [task]")
     }
+    Ok(())
 }
 
 fn add(mut args: Args, storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
@@ -71,13 +64,11 @@ fn add(mut args: Args, storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
             .map(|(id, _)| *id + 1)
             .unwrap_or(1);
 
-        storage
-            .append_blocking(
-                "todo",
-                Some(OffsetDateTime::now_utc()),
-                serde_json::to_value((next_id, Some(&task)))?,
-            )
-            .unwrap();
+        storage.append_blocking(
+            "todo",
+            Some(OffsetDateTime::now_utc()),
+            serde_json::to_value((next_id, Some(&task)))?,
+        )?;
         println!("Added {task} with id {next_id}")
     } else {
         println!("No task was provided. sync_demo add [task]")
