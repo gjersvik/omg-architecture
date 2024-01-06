@@ -5,6 +5,7 @@ use std::{
 };
 
 use omg_core::{Agency, Agent, Storage};
+use time::OffsetDateTime;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
@@ -26,10 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Match on the next to decide operation
     match args.next().as_deref() {
         Some("list") => list(storage.as_ref()),
-        Some("add") => {
-            add(args, todo);
-            Ok(())
-        }
+        Some("add") => add(args, storage.as_ref()),
         Some("remove") => {
             remove(args, todo);
             Ok(())
@@ -66,23 +64,25 @@ fn remove(mut args: Args, mut agent: Agent<u64, String>) {
     }
 }
 
-fn add(mut args: Args, mut agent: Agent<u64, String>) {
+fn add(mut args: Args, storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
     if let Some(task) = args.next() {
-        // Here we get the one more than the last id in a sorted map.
-        let next_id = agent
-            .load_blocking()
-            .unwrap()
+        let next_id = load_tasks(storage)?
             .last_key_value()
             .map(|(id, _)| *id + 1)
             .unwrap_or(1);
 
-        // The blocking version of insertion. The change will be persisted before return.
-        // If there we more than one Todo Agent the data would be synced between them.
-        agent.insert_blocking(next_id, task.clone()).unwrap();
+        storage
+            .append_blocking(
+                "todo",
+                Some(OffsetDateTime::now_utc()),
+                serde_json::to_value((next_id, Some(&task)))?,
+            )
+            .unwrap();
         println!("Added {task} with id {next_id}")
     } else {
         println!("No task was provided. sync_demo add [task]")
     }
+    Ok(())
 }
 
 fn list(storage: &dyn Storage) -> Result<(), Box<dyn Error>> {

@@ -13,7 +13,7 @@ struct SqliteBackend {
 }
 
 impl Storage for SqliteBackend {
-    fn append_blocking(&self, _topic: &str, _created: Option<OffsetDateTime>, _data: &Value) -> Result<(), Box<dyn Error>> {
+    fn append_blocking(&self, _topic: &str, _created: Option<OffsetDateTime>, _data: Value) -> Result<(), Box<dyn Error>> {
         todo!()
     }
 
