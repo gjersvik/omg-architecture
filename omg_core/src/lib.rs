@@ -3,6 +3,15 @@ extern crate alloc;
 
 use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use time::OffsetDateTime;
+
+pub struct Message {
+    pub seq: u64,
+    pub created: OffsetDateTime,
+    pub accepted: OffsetDateTime,
+    pub data: Value,
+}
 
 pub trait Storage: Send + Sync {}
 pub trait Key: Ord {}
