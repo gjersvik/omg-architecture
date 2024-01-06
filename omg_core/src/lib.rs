@@ -1,7 +1,5 @@
-#![no_std]
-extern crate alloc;
+use std::{sync::Arc, collections::BTreeMap, error::Error};
 
-use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use time::OffsetDateTime;
@@ -15,7 +13,7 @@ pub struct Message {
 }
 
 pub trait Storage: Send + Sync {
-    fn append_blocking(&self, topic: &str, created: Option<OffsetDateTime>, data: &Value) -> Result<(), String>;
+    fn append_blocking(&self, topic: &str, created: Option<OffsetDateTime>, data: &Value) -> Result<(), Box<dyn Error>>;
 }
 pub trait Key: Ord {}
 impl<T: Ord> Key for T {}
