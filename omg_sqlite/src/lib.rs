@@ -2,7 +2,7 @@ use std::{error::Error, path::Path, sync::Arc};
 
 use omg_core::{Message, Storage};
 use serde_json::Value;
-use sqlite::{Connection, ConnectionThreadSafe};
+use sqlite::{Connection, ConnectionThreadSafe, State};
 use time::OffsetDateTime;
 
 pub fn file_blocking(path: impl AsRef<Path>) -> Result<Box<dyn Storage>, Box<dyn Error>> {
@@ -18,11 +18,34 @@ struct SqliteBackend {
 impl Storage for SqliteBackend {
     fn append_blocking(
         &self,
-        _topic: &str,
-        _created: Option<OffsetDateTime>,
-        _data: Value,
+        topic: &str,
+        created: Option<OffsetDateTime>,
+        data: Value,
     ) -> Result<(), Box<dyn Error>> {
-        todo!()
+        let mut statement = self
+            .db
+            .prepare("SELECT seq FROM messages WHERE topic = ? ORDER BY seq DESC LIMIT 1")?;
+        statement.bind((1, topic))?;
+        let seq = if statement.next()? == State::Row {
+            statement.read("seq")?
+        } else {
+            0
+        } + 1;
+
+        let mut statement = self
+            .db
+            .prepare("INSERT INTO messages VALUES (:topic, :seq, :created, :stored, :data)")?;
+        statement.bind((":topic", topic))?;
+        statement.bind((":seq", seq))?;
+
+        let stored = OffsetDateTime::now_utc();
+        let created = created.unwrap_or(stored);
+        statement.bind((":created", created.unix_timestamp()))?;
+        statement.bind((":stored", stored.unix_timestamp()))?;
+        statement.bind((":data", data.to_string().as_str()))?;
+
+        while statement.next()? != State::Done {}
+        Ok(())
     }
 
     fn read_all_blocking(&self, topic: &str) -> Result<Vec<omg_core::Message>, Box<dyn Error>> {
