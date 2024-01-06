@@ -1,11 +1,12 @@
 use std::{
     collections::BTreeMap,
     env::{self, Args},
+    error::Error,
 };
 
 use omg_core::{Agency, Agent, Storage};
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
     // In this case we device to use Sqlite as backed and configure it with what file to use.
     let storage = omg_sqlite::file("todo.db").unwrap();
@@ -25,9 +26,18 @@ fn main() {
     // Match on the next to decide operation
     match args.next().as_deref() {
         Some("list") => list(storage.as_ref()),
-        Some("add") => add(args, todo),
-        Some("remove") => remove(args, todo),
-        _ => help(),
+        Some("add") => {
+            add(args, todo);
+            Ok(())
+        }
+        Some("remove") => {
+            remove(args, todo);
+            Ok(())
+        }
+        _ => {
+            help();
+            Ok(())
+        }
     }
 }
 
@@ -75,8 +85,15 @@ fn add(mut args: Args, mut agent: Agent<u64, String>) {
     }
 }
 
-fn list(storage: &dyn Storage) {
-    let messages = storage.read_all_blocking("todo").unwrap();
+fn list(storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
+    for (id, task) in load_tasks(storage)?.iter() {
+        println!("{id}: {task}");
+    }
+    Ok(())
+}
+
+fn load_tasks(storage: &dyn Storage) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
+    let messages = storage.read_all_blocking("todo")?;
     let tasks = messages
         .into_iter()
         .try_fold(BTreeMap::new(), |mut map, msg| {
@@ -92,10 +109,6 @@ fn list(storage: &dyn Storage) {
                 }
                 Err(err) => Err(err),
             }
-        })
-        .unwrap();
-
-    for (id, task) in tasks.iter() {
-        println!("{id}: {task}");
-    }
+        })?;
+    Ok(tasks)
 }
