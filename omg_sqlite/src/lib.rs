@@ -17,7 +17,7 @@ impl Storage for SqliteBackend {
         todo!()
     }
 
-    fn read_all(&self, _topic: &str) -> Result<Vec<omg_core::Message>, Box<dyn Error>> {
+    fn read_all_blocking(&self, _topic: &str) -> Result<Vec<omg_core::Message>, Box<dyn Error>> {
         todo!()
     }
 }

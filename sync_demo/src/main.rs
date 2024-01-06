@@ -1,16 +1,19 @@
-use std::env::{self, Args};
+use std::{
+    collections::BTreeMap,
+    env::{self, Args},
+};
 
-use omg_core::{Agency, Agent};
+use omg_core::{Agency, Agent, Storage};
 
 fn main() {
     // Before the main application starts we configure the Agency using crates that implements features.
-    // In this case we device to use Sqlite as backed and configure it with what file to use. 
+    // In this case we device to use Sqlite as backed and configure it with what file to use.
     let storage = omg_sqlite::file("todo.db").unwrap();
 
     // Once we have configured all the parts we create the Agency we will use for the rest of application.
-    let agency = Agency::new(Some(storage));
+    let agency = Agency::new(None);
 
-    // Get or create an agent we will use for this todo app. 
+    // Get or create an agent we will use for this todo app.
     let todo = agency.agent("todo");
 
     // Get arguments
@@ -21,7 +24,7 @@ fn main() {
 
     // Match on the next to decide operation
     match args.next().as_deref() {
-        Some("list") => list(todo),
+        Some("list") => list(storage.as_ref()),
         Some("add") => add(args, todo),
         Some("remove") => remove(args, todo),
         _ => help(),
@@ -42,7 +45,6 @@ fn help() {
 
 fn remove(mut args: Args, mut agent: Agent<u64, String>) {
     if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
-
         // There we use the blocking version of the remove api. The change will be persisted before return.
         if let Some(task) = agent.remove_blocking(&id).unwrap() {
             println!("Removed {task} with id {id}")
@@ -58,7 +60,8 @@ fn add(mut args: Args, mut agent: Agent<u64, String>) {
     if let Some(task) = args.next() {
         // Here we get the one more than the last id in a sorted map.
         let next_id = agent
-            .load_blocking().unwrap()
+            .load_blocking()
+            .unwrap()
             .last_key_value()
             .map(|(id, _)| *id + 1)
             .unwrap_or(1);
@@ -72,11 +75,27 @@ fn add(mut args: Args, mut agent: Agent<u64, String>) {
     }
 }
 
-fn list(agent: Agent<u64, String>) {
-    // Load will make sure that materialized view is up to date. We use the blocking version.
-    // Then return a read only reference to that view so that you can use all the rust apis you need.
-    // Load may fail if the underlying storage fails or the types persisted is incompatible with the type asked for. Serialization error.
-    for (id, task) in agent.load_blocking().unwrap().iter() {
+fn list(storage: &dyn Storage) {
+    let messages = storage.read_all_blocking("todo").unwrap();
+    let tasks = messages
+        .into_iter()
+        .try_fold(BTreeMap::new(), |mut map, msg| {
+            let event: Result<(u64, Option<String>), _> = serde_json::from_value(msg.data);
+            match event {
+                Ok((key, Some(value))) => {
+                    map.insert(key, value);
+                    Ok(map)
+                }
+                Ok((key, None)) => {
+                    map.remove(&key);
+                    Ok(map)
+                }
+                Err(err) => Err(err),
+            }
+        })
+        .unwrap();
+
+    for (id, task) in tasks.iter() {
         println!("{id}: {task}");
     }
 }
