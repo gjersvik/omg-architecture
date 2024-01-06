@@ -7,13 +7,16 @@ use serde_json::Value;
 use time::OffsetDateTime;
 
 pub struct Message {
+    pub topic_name: Arc<str>,
     pub seq: u64,
     pub created: OffsetDateTime,
-    pub accepted: OffsetDateTime,
+    pub stored: OffsetDateTime,
     pub data: Value,
 }
 
-pub trait Storage: Send + Sync {}
+pub trait Storage: Send + Sync {
+    fn append_blocking(&self, topic: &str, created: Option<OffsetDateTime>, data: &Value) -> Result<(), String>;
+}
 pub trait Key: Ord {}
 impl<T: Ord> Key for T {}
 
