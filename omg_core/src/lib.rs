@@ -35,4 +35,19 @@ impl Agency {
     pub fn storage(&self) -> &dyn Storage {
         self.storage.as_ref()
     }
+
+    pub fn topic(&self, name: &str) -> Topic {
+        Topic { name: name.to_owned(), storage: self.storage.clone() }
+    }
+}
+
+pub struct Topic {
+    name: String,
+    storage: Arc<dyn Storage>,
+}
+
+impl Topic {
+    pub fn publish(&self, data: Value) -> Result<(), Box<dyn Error>> {
+        self.storage.append_blocking(&self.name, Some(OffsetDateTime::now_utc()), data)
+    } 
 }

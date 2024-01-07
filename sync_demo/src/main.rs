@@ -5,7 +5,6 @@ use std::{
 };
 
 use omg_core::Agency;
-use time::OffsetDateTime;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
@@ -47,9 +46,7 @@ fn help() {
 fn remove(mut args: Args, agency: &Agency) -> Result<(), Box<dyn Error>> {
     if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
         // There we use the blocking version of the remove api. The change will be persisted before return.
-        agency.storage().append_blocking(
-            "todo",
-            Some(OffsetDateTime::now_utc()),
+        agency.topic("todo").publish(
             serde_json::to_value((id, None::<String>))?,
         )?;
         println!("Removed task with id {id}")
@@ -66,11 +63,9 @@ fn add(mut args: Args, agency: &Agency) -> Result<(), Box<dyn Error>> {
             .map(|(id, _)| *id + 1)
             .unwrap_or(1);
 
-        agency.storage().append_blocking(
-            "todo",
-            Some(OffsetDateTime::now_utc()),
-            serde_json::to_value((next_id, Some(&task)))?,
-        )?;
+        agency
+            .topic("todo")
+            .publish(serde_json::to_value((next_id, Some(&task)))?)?;
         println!("Added {task} with id {next_id}")
     } else {
         println!("No task was provided. sync_demo add [task]")
