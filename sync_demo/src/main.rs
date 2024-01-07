@@ -13,8 +13,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // In this case we device to use Sqlite as backed and configure it with what file to use.
     let storage = omg_sqlite::file_blocking("todo.db").unwrap();
 
-    let agency = Agency::new(storage);
-    let topic = agency.topic("todo");
+    let mut agency = Agency::load(storage)?;
+    let topic = agency.create_topic("todo");
 
     // Get arguments
     let mut args = env::args();
@@ -82,16 +82,14 @@ fn list(topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error>> {
 fn load_tasks(topic: &Topic<TodoMsg>) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
     let tasks = topic
         .subscribe()?
-        .fold(BTreeMap::new(), |mut map, event| {
-            match event {
-                (key, Some(value)) => {
-                    map.insert(key, value);
-                    map
-                }
-                (key, None) => {
-                    map.remove(&key);
-                    map
-                }
+        .fold(BTreeMap::new(), |mut map, event| match event {
+            (key, Some(value)) => {
+                map.insert(key, value);
+                map
+            }
+            (key, None) => {
+                map.remove(&key);
+                map
             }
         });
     Ok(tasks)

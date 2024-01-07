@@ -1,6 +1,6 @@
 use std::{error::Error, path::Path, sync::Arc};
 
-use omg_core::{StorageObj, Storage, StorageTopic};
+use omg_core::{Storage, StorageObj, StorageTopic};
 use serde_json::Value;
 use sqlite::{Connection, ConnectionThreadSafe, State};
 use time::OffsetDateTime;
@@ -80,7 +80,7 @@ impl Storage for SqliteBackend {
                 let row = row?;
 
                 Ok(StorageTopic {
-                    name: row.try_read::<&str, _>("topic")?.to_owned(),
+                    name: Arc::from(row.try_read::<&str, _>("topic")?),
                     first: row.try_read::<i64, _>("first")? as u64,
                     last: row.try_read::<i64, _>("last")? as u64,
                 })
