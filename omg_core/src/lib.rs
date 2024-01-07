@@ -10,11 +10,8 @@ use serde_json::Value;
 use time::OffsetDateTime;
 use tokio::sync::watch;
 
-pub struct StorageObj {
-    pub topic_name: Arc<str>,
+pub struct StorageItem {
     pub seq: u64,
-    pub created: OffsetDateTime,
-    pub stored: OffsetDateTime,
     pub data: Value,
 }
 
@@ -32,12 +29,12 @@ pub trait Storage: Send + Sync {
         created: OffsetDateTime,
         data: Value,
     ) -> Result<(), Box<dyn Error>>;
-    fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageObj>, Box<dyn Error>>;
+    fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>>;
 }
 
 pub struct Agency {
     storage: Arc<dyn Storage>,
-    topics: HashMap<Arc<str>, Arc<TopicCore>>
+    topics: HashMap<Arc<str>, Arc<TopicCore>>,
 }
 
 impl Agency {
@@ -46,21 +43,24 @@ impl Agency {
         let mut topics = HashMap::new();
         for topic in storage.topics()?.into_iter() {
             let data = storage.read_all_blocking(&topic.name)?;
-            topics.insert(topic.name.clone(), TopicCore::new(topic, data, storage.clone()));
+            topics.insert(
+                topic.name.clone(),
+                TopicCore::new(topic, data, storage.clone()),
+            );
         }
 
-        Ok(Agency {
-            storage,
-            topics,
-        })
+        Ok(Agency { storage, topics })
     }
 
     pub fn create_topic<M: Message>(&mut self, name: &str) -> Topic<M> {
         match self.topics.get(name) {
             Some(core) => Topic::new(core.clone()),
             None => {
-                let name: Arc<str> = Arc::from(name); 
-                self.topics.insert(name.clone(), TopicCore::empty(name.clone(), self.storage.clone()));
+                let name: Arc<str> = Arc::from(name);
+                self.topics.insert(
+                    name.clone(),
+                    TopicCore::empty(name.clone(), self.storage.clone()),
+                );
                 self.create_topic(&name)
             }
         }
@@ -89,7 +89,7 @@ impl<M: Message> Topic<M> {
         Ok(())
     }
 
-    pub fn subscribe(&self) -> impl Iterator<Item = Result<M, Box<dyn Error>>>{
+    pub fn subscribe(&self) -> impl Iterator<Item = Result<M, Box<dyn Error>>> {
         Subscribe::new(self.core.clone())
     }
 }
@@ -103,7 +103,11 @@ pub struct Subscribe<M: Message> {
 impl<M: Message> Subscribe<M> {
     fn new(core: Arc<TopicCore>) -> Self {
         let current = core.first();
-        Subscribe { core, current, _marker: PhantomData}
+        Subscribe {
+            core,
+            current,
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -112,10 +116,10 @@ impl<M: Message> Iterator for Subscribe<M> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let value = self.core.get(self.current);
-        if value.is_some(){
+        if value.is_some() {
             self.current += 1;
         }
-        value.map(|v|Ok(serde_json::from_value::<M>(v)?))
+        value.map(|v| Ok(serde_json::from_value::<M>(v)?))
     }
 }
 
@@ -129,14 +133,18 @@ struct TopicCore {
 }
 
 impl TopicCore {
-    pub fn new(topic: StorageTopic, data: Vec<StorageObj>, storage: Arc<dyn Storage>) -> Arc<TopicCore> {
+    pub fn new(
+        topic: StorageTopic,
+        data: Vec<StorageItem>,
+        storage: Arc<dyn Storage>,
+    ) -> Arc<TopicCore> {
         let topic_core = TopicCore {
             name: topic.name,
             first: watch::Sender::new(topic.first),
             last: watch::Sender::new(topic.last),
             storage,
             cache: Mutex::new(data.into_iter().map(|item| (item.seq, item.data)).collect()),
-            atomic_publish: Mutex::new(())
+            atomic_publish: Mutex::new(()),
         };
         Arc::new(topic_core)
     }
@@ -148,17 +156,18 @@ impl TopicCore {
             last: watch::Sender::new(0),
             storage,
             cache: Mutex::new(BTreeMap::new()),
-            atomic_publish: Mutex::new(())
+            atomic_publish: Mutex::new(()),
         };
         Arc::new(topic_core)
     }
 
-    pub fn publish(&self, data: Value) -> Result<(), Box<dyn Error>>{
+    pub fn publish(&self, data: Value) -> Result<(), Box<dyn Error>> {
         let _stay_until_after_return = self.atomic_publish.lock().unwrap();
 
-        let next =  *self.last.borrow() + 1;
+        let next = *self.last.borrow() + 1;
         // Save to disk
-        self.storage.append_blocking(&self.name, OffsetDateTime::now_utc(), data.clone())?;
+        self.storage
+            .append_blocking(&self.name, OffsetDateTime::now_utc(), data.clone())?;
         // Save to cache
         {
             self.cache.lock().unwrap().insert(next, data);
@@ -174,5 +183,5 @@ impl TopicCore {
 
     pub fn first(&self) -> u64 {
         *self.first.borrow()
-    } 
+    }
 }
