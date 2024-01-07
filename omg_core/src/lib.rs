@@ -54,7 +54,9 @@ impl Topic {
         self.storage.append_blocking(&self.name, OffsetDateTime::now_utc(), serde_json::to_value(data)?)
     }
 
-    pub fn subscribe(&self) -> Result<impl Iterator<Item = StorageObj>, Box<dyn Error>> {
-        self.storage.read_all_blocking(&self.name).map(|v| v.into_iter())
+    pub fn subscribe<M: Message>(&self) -> Result<impl Iterator<Item = M>, Box<dyn Error>> {
+        let vec = self.storage.read_all_blocking(&self.name)?;
+        let data = vec.into_iter().map(|msg| serde_json::from_value::<M>(msg.data)).collect::<Result<Vec<M>, _>>()?;
+        Ok(data.into_iter())
     }
 }

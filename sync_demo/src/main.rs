@@ -80,19 +80,17 @@ fn list(topic: &Topic) -> Result<(), Box<dyn Error>> {
 fn load_tasks(topic: &Topic) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
     let tasks = topic
         .subscribe()?
-        .try_fold(BTreeMap::new(), |mut map, msg| {
-            let event: Result<(u64, Option<String>), _> = serde_json::from_value(msg.data);
+        .fold(BTreeMap::new(), |mut map, event| {
             match event {
-                Ok((key, Some(value))) => {
+                (key, Some(value)) => {
                     map.insert(key, value);
-                    Ok(map)
+                    map
                 }
-                Ok((key, None)) => {
+                (key, None) => {
                     map.remove(&key);
-                    Ok(map)
+                    map
                 }
-                Err(err) => Err(err),
             }
-        })?;
+        });
     Ok(tasks)
 }
