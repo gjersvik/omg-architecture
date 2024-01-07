@@ -47,7 +47,7 @@ fn help() {
 fn remove(mut args: Args, topic: &Topic) -> Result<(), Box<dyn Error>> {
     if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
         // There we use the blocking version of the remove api. The change will be persisted before return.
-        topic.publish(serde_json::to_value((id, None::<String>))?)?;
+        topic.publish((id, None::<String>))?;
         println!("Removed task with id {id}")
     } else {
         println!("No task was provided. sync_demo remove [task]")
@@ -62,7 +62,7 @@ fn add(mut args: Args, topic: &Topic) -> Result<(), Box<dyn Error>> {
             .map(|(id, _)| *id + 1)
             .unwrap_or(1);
 
-        topic.publish(serde_json::to_value((next_id, Some(&task)))?)?;
+        topic.publish((next_id, Some(task.clone())))?;
         println!("Added {task} with id {next_id}")
     } else {
         println!("No task was provided. sync_demo add [task]")
