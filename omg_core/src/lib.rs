@@ -12,7 +12,14 @@ pub struct StorageObj {
     pub data: Value,
 }
 
+pub struct StorageTopic {
+    pub name: String,
+    pub first: u64,
+    pub last: u64,
+}
+
 pub trait Storage: Send + Sync {
+    fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>>;
     fn append_blocking(
         &self,
         topic: &str,

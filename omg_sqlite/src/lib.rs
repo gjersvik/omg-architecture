@@ -1,6 +1,6 @@
 use std::{error::Error, path::Path, sync::Arc};
 
-use omg_core::{StorageObj, Storage};
+use omg_core::{StorageObj, Storage, StorageTopic};
 use serde_json::Value;
 use sqlite::{Connection, ConnectionThreadSafe, State};
 use time::OffsetDateTime;
@@ -65,6 +65,24 @@ impl Storage for SqliteBackend {
                     created: OffsetDateTime::from_unix_timestamp(row.try_read("created")?)?,
                     stored: OffsetDateTime::from_unix_timestamp(row.try_read("stored")?)?,
                     data: serde_json::from_str(row.try_read("data")?)?,
+                })
+            })
+            .collect()
+    }
+
+    fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>> {
+        let statement = self.db.prepare(
+            "SELECT topic, min(seq) as first, max(seq) as last FROM messages GROUP BY topic",
+        )?;
+        statement
+            .into_iter()
+            .map(|row| {
+                let row = row?;
+
+                Ok(StorageTopic {
+                    name: row.try_read::<&str, _>("topic")?.to_owned(),
+                    first: row.try_read::<i64, _>("first")? as u64,
+                    last: row.try_read::<i64, _>("last")? as u64,
                 })
             })
             .collect()
