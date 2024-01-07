@@ -6,6 +6,8 @@ use std::{
 
 use omg_core::{Agency, Topic};
 
+type TodoMsg = (u64, Option<String>);
+
 fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
     // In this case we device to use Sqlite as backed and configure it with what file to use.
@@ -44,10 +46,10 @@ fn help() {
     println!("Removes/completes the task with id: id.");
 }
 
-fn remove(mut args: Args, topic: &Topic) -> Result<(), Box<dyn Error>> {
+fn remove(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error>> {
     if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
         // There we use the blocking version of the remove api. The change will be persisted before return.
-        topic.publish((id, None::<String>))?;
+        topic.publish((id, None))?;
         println!("Removed task with id {id}")
     } else {
         println!("No task was provided. sync_demo remove [task]")
@@ -55,7 +57,7 @@ fn remove(mut args: Args, topic: &Topic) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn add(mut args: Args, topic: &Topic) -> Result<(), Box<dyn Error>> {
+fn add(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error>> {
     if let Some(task) = args.next() {
         let next_id = load_tasks(topic)?
             .last_key_value()
@@ -70,14 +72,14 @@ fn add(mut args: Args, topic: &Topic) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn list(topic: &Topic) -> Result<(), Box<dyn Error>> {
+fn list(topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error>> {
     for (id, task) in load_tasks(topic)?.iter() {
         println!("{id}: {task}");
     }
     Ok(())
 }
 
-fn load_tasks(topic: &Topic) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
+fn load_tasks(topic: &Topic<TodoMsg>) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
     let tasks = topic
         .subscribe()?
         .fold(BTreeMap::new(), |mut map, event| {
