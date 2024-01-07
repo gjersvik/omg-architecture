@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     error::Error,
     marker::PhantomData,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ pub trait Storage: Send + Sync {
 
 pub struct Agency {
     storage: Arc<dyn Storage>,
-    topics: HashMap<Arc<str>, Arc<RwLock<TopicCore>>>
+    topics: HashMap<Arc<str>, Arc<TopicCore>>
 }
 
 impl Agency {
@@ -72,12 +72,12 @@ pub trait Message: Serialize + for<'a> Deserialize<'a> {}
 impl<T> Message for T where T: Serialize + for<'a> Deserialize<'a> {}
 
 pub struct Topic<M: Message> {
-    core: Arc<RwLock<TopicCore>>,
+    core: Arc<TopicCore>,
     _marker: PhantomData<M>,
 }
 
 impl<M: Message> Topic<M> {
-    fn new(core: Arc<RwLock<TopicCore>>) -> Self {
+    fn new(core: Arc<TopicCore>) -> Self {
         Topic {
             core,
             _marker: PhantomData,
@@ -85,7 +85,7 @@ impl<M: Message> Topic<M> {
     }
 
     pub fn publish(&self, data: M) -> Result<(), Box<dyn Error>> {
-        self.core.write().unwrap().publish(serde_json::to_value(data)?)?;
+        self.core.publish(serde_json::to_value(data)?)?;
         Ok(())
     }
 
@@ -95,14 +95,14 @@ impl<M: Message> Topic<M> {
 }
 
 pub struct Subscribe<M: Message> {
-    core: Arc<RwLock<TopicCore>>,
+    core: Arc<TopicCore>,
     current: u64,
     _marker: PhantomData<M>,
 }
 
 impl<M: Message> Subscribe<M> {
-    fn new(core: Arc<RwLock<TopicCore>>) -> Self {
-        let current = core.read().unwrap().first();
+    fn new(core: Arc<TopicCore>) -> Self {
+        let current = core.first();
         Subscribe { core, current, _marker: PhantomData}
     }
 }
@@ -111,7 +111,7 @@ impl<M: Message> Iterator for Subscribe<M> {
     type Item = Result<M, Box<dyn Error>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let value = self.core.read().unwrap().get(self.current);
+        let value = self.core.get(self.current);
         if value.is_some(){
             self.current += 1;
         }
@@ -124,45 +124,52 @@ struct TopicCore {
     first: watch::Sender<u64>,
     last: watch::Sender<u64>,
     storage: Arc<dyn Storage>,
-    cache: BTreeMap<u64, Value>,
+    cache: Mutex<BTreeMap<u64, Value>>,
+    atomic_publish: Mutex<()>,
 }
 
 impl TopicCore {
-    pub fn new(topic: StorageTopic, data: Vec<StorageObj>, storage: Arc<dyn Storage>) -> Arc<RwLock<TopicCore>> {
+    pub fn new(topic: StorageTopic, data: Vec<StorageObj>, storage: Arc<dyn Storage>) -> Arc<TopicCore> {
         let topic_core = TopicCore {
             name: topic.name,
             first: watch::Sender::new(topic.first),
             last: watch::Sender::new(topic.last),
             storage,
-            cache: data.into_iter().map(|item| (item.seq, item.data)).collect(),
+            cache: Mutex::new(data.into_iter().map(|item| (item.seq, item.data)).collect()),
+            atomic_publish: Mutex::new(())
         };
-        Arc::new(RwLock::new(topic_core))
+        Arc::new(topic_core)
     }
 
-    pub fn empty(name: Arc<str>, storage: Arc<dyn Storage>) -> Arc<RwLock<TopicCore>> {
+    pub fn empty(name: Arc<str>, storage: Arc<dyn Storage>) -> Arc<TopicCore> {
         let topic_core = TopicCore {
             name,
             first: watch::Sender::new(1),
             last: watch::Sender::new(0),
             storage,
-            cache: BTreeMap::new(),
+            cache: Mutex::new(BTreeMap::new()),
+            atomic_publish: Mutex::new(())
         };
-        Arc::new(RwLock::new(topic_core))
+        Arc::new(topic_core)
     }
 
-    pub fn publish(&mut self, data: Value) -> Result<(), Box<dyn Error>>{
+    pub fn publish(&self, data: Value) -> Result<(), Box<dyn Error>>{
+        let _stay_until_after_return = self.atomic_publish.lock().unwrap();
+
         let next =  *self.last.borrow() + 1;
         // Save to disk
         self.storage.append_blocking(&self.name, OffsetDateTime::now_utc(), data.clone())?;
         // Save to cache
-        self.cache.insert(next, data);
+        {
+            self.cache.lock().unwrap().insert(next, data);
+        }
         // Update last.
         self.last.send_replace(next);
         Ok(())
     }
 
     pub fn get(&self, seq: u64) -> Option<Value> {
-        self.cache.get(&seq).cloned()
+        self.cache.lock().unwrap().get(&seq).cloned()
     }
 
     pub fn first(&self) -> u64 {
