@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     error::Error,
     marker::PhantomData,
     sync::{Arc, Mutex},
@@ -27,13 +27,13 @@ pub trait Storage: Send + Sync {
 
 pub struct Agency {
     storage: Arc<dyn Storage>,
-    topics: HashMap<Arc<str>, Arc<TopicCore>>,
+    topics: BTreeMap<Arc<str>, Arc<TopicCore>>,
 }
 
 impl Agency {
     pub fn load(storage: Box<dyn Storage>) -> Result<Self, Box<dyn Error>> {
         let storage: Arc<dyn Storage> = storage.into();
-        let mut topics = HashMap::new();
+        let mut topics = BTreeMap::new();
         for topic in storage.topics()?.into_iter() {
             let data = storage.read_all_blocking(&topic.name)?;
             topics.insert(
