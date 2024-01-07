@@ -20,3 +20,19 @@ pub trait Storage: Send + Sync {
     ) -> Result<(), Box<dyn Error>>;
     fn read_all_blocking(&self, topic: &str) -> Result<Vec<Message>, Box<dyn Error>>;
 }
+
+pub struct Agency {
+    storage: Arc<dyn Storage>,
+}
+
+impl Agency {
+    pub fn new(storage: Box<dyn Storage>) -> Self {
+        Agency {
+            storage: storage.into(),
+        }
+    }
+
+    pub fn storage(&self) -> &dyn Storage {
+        self.storage.as_ref()
+    }
+}

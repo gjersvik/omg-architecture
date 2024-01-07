@@ -4,13 +4,15 @@ use std::{
     error::Error,
 };
 
-use omg_core::Storage;
+use omg_core::{Agency, Storage};
 use time::OffsetDateTime;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
     // In this case we device to use Sqlite as backed and configure it with what file to use.
     let storage = omg_sqlite::file_blocking("todo.db").unwrap();
+
+    let agency = Agency::new(storage);
 
     // Get arguments
     let mut args = env::args();
@@ -20,9 +22,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Match on the next to decide operation
     match args.next().as_deref() {
-        Some("list") => list(storage.as_ref()),
-        Some("add") => add(args, storage.as_ref()),
-        Some("remove") => remove(args, storage.as_ref()),
+        Some("list") => list(agency.storage()),
+        Some("add") => add(args, agency.storage()),
+        Some("remove") => remove(args, agency.storage()),
         _ => {
             help();
             Ok(())
