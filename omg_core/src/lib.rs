@@ -7,7 +7,6 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use time::OffsetDateTime;
 use tokio::sync::watch;
 
 pub struct StorageItem {
@@ -26,7 +25,7 @@ pub trait Storage: Send + Sync {
     fn append_blocking(
         &self,
         topic: &str,
-        created: OffsetDateTime,
+        seq: u64,
         data: Value,
     ) -> Result<(), Box<dyn Error>>;
     fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>>;
@@ -167,7 +166,7 @@ impl TopicCore {
         let next = *self.last.borrow() + 1;
         // Save to disk
         self.storage
-            .append_blocking(&self.name, OffsetDateTime::now_utc(), data.clone())?;
+            .append_blocking(&self.name, next, data.clone())?;
         // Save to cache
         {
             self.cache.lock().unwrap().insert(next, data);

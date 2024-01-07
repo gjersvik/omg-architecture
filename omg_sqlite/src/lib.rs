@@ -3,11 +3,10 @@ use std::{error::Error, path::Path, sync::Arc};
 use omg_core::{Storage, StorageItem, StorageTopic};
 use serde_json::Value;
 use sqlite::{Connection, ConnectionThreadSafe, State};
-use time::OffsetDateTime;
 
 pub fn file_blocking(path: impl AsRef<Path>) -> Result<Box<dyn Storage>, Box<dyn Error>> {
     let db = Connection::open_thread_safe(path)?;
-    db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, created INTEGER, stored INTEGER, data TEXT)")?;
+    db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")?;
     Ok(Box::new(SqliteBackend { db }))
 }
 
@@ -19,27 +18,14 @@ impl Storage for SqliteBackend {
     fn append_blocking(
         &self,
         topic: &str,
-        created: OffsetDateTime,
+        seq: u64,
         data: Value,
     ) -> Result<(), Box<dyn Error>> {
         let mut statement = self
             .db
-            .prepare("SELECT seq FROM messages WHERE topic = ? ORDER BY seq DESC LIMIT 1")?;
-        statement.bind((1, topic))?;
-        let seq = if statement.next()? == State::Row {
-            statement.read("seq")?
-        } else {
-            0
-        } + 1;
-
-        let mut statement = self
-            .db
-            .prepare("INSERT INTO messages VALUES (:topic, :seq, :created, :stored, :data)")?;
+            .prepare("INSERT INTO messages VALUES (:topic, :seq, :data)")?;
         statement.bind((":topic", topic))?;
-        statement.bind((":seq", seq))?;
-        statement.bind((":created", created.unix_timestamp()))?;
-        let stored = OffsetDateTime::now_utc();
-        statement.bind((":stored", stored.unix_timestamp()))?;
+        statement.bind((":seq", seq as i64))?;
         statement.bind((":data", data.to_string().as_str()))?;
 
         while statement.next()? != State::Done {}
