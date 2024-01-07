@@ -6,12 +6,11 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tokio::sync::watch;
 
 pub struct StorageItem {
     pub seq: u64,
-    pub data: Value,
+    pub data: Arc<str>,
 }
 
 pub struct StorageTopic {
@@ -22,12 +21,7 @@ pub struct StorageTopic {
 
 pub trait Storage: Send + Sync {
     fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>>;
-    fn append_blocking(
-        &self,
-        topic: &str,
-        seq: u64,
-        data: Value,
-    ) -> Result<(), Box<dyn Error>>;
+    fn append_blocking(&self, topic: &str, seq: u64, data: &str) -> Result<(), Box<dyn Error>>;
     fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>>;
 }
 
@@ -84,7 +78,7 @@ impl<M: Message> Topic<M> {
     }
 
     pub fn publish(&self, data: M) -> Result<(), Box<dyn Error>> {
-        self.core.publish(serde_json::to_value(data)?)?;
+        self.core.publish(serde_json::to_string(&data)?)?;
         Ok(())
     }
 
@@ -118,7 +112,7 @@ impl<M: Message> Iterator for Subscribe<M> {
         if value.is_some() {
             self.current += 1;
         }
-        value.map(|v| Ok(serde_json::from_value::<M>(v)?))
+        value.map(|v| Ok(serde_json::from_str::<M>(&v)?))
     }
 }
 
@@ -127,7 +121,7 @@ struct TopicCore {
     first: watch::Sender<u64>,
     last: watch::Sender<u64>,
     storage: Arc<dyn Storage>,
-    cache: Mutex<BTreeMap<u64, Value>>,
+    cache: Mutex<BTreeMap<u64, Arc<str>>>,
     atomic_publish: Mutex<()>,
 }
 
@@ -160,23 +154,22 @@ impl TopicCore {
         Arc::new(topic_core)
     }
 
-    pub fn publish(&self, data: Value) -> Result<(), Box<dyn Error>> {
+    pub fn publish(&self, data: String) -> Result<(), Box<dyn Error>> {
         let _stay_until_after_return = self.atomic_publish.lock().unwrap();
 
         let next = *self.last.borrow() + 1;
         // Save to disk
-        self.storage
-            .append_blocking(&self.name, next, data.clone())?;
+        self.storage.append_blocking(&self.name, next, &data)?;
         // Save to cache
         {
-            self.cache.lock().unwrap().insert(next, data);
+            self.cache.lock().unwrap().insert(next, data.into());
         }
         // Update last.
         self.last.send_replace(next);
         Ok(())
     }
 
-    pub fn get(&self, seq: u64) -> Option<Value> {
+    pub fn get(&self, seq: u64) -> Option<Arc<str>> {
         self.cache.lock().unwrap().get(&seq).cloned()
     }
 

@@ -1,7 +1,6 @@
 use std::{error::Error, path::Path, sync::Arc};
 
 use omg_core::{Storage, StorageItem, StorageTopic};
-use serde_json::Value;
 use sqlite::{Connection, ConnectionThreadSafe, State};
 
 pub fn file_blocking(path: impl AsRef<Path>) -> Result<Box<dyn Storage>, Box<dyn Error>> {
@@ -15,18 +14,13 @@ struct SqliteBackend {
 }
 
 impl Storage for SqliteBackend {
-    fn append_blocking(
-        &self,
-        topic: &str,
-        seq: u64,
-        data: Value,
-    ) -> Result<(), Box<dyn Error>> {
+    fn append_blocking(&self, topic: &str, seq: u64, data: &str) -> Result<(), Box<dyn Error>> {
         let mut statement = self
             .db
             .prepare("INSERT INTO messages VALUES (:topic, :seq, :data)")?;
         statement.bind((":topic", topic))?;
         statement.bind((":seq", seq as i64))?;
-        statement.bind((":data", data.to_string().as_str()))?;
+        statement.bind((":data", data))?;
 
         while statement.next()? != State::Done {}
         Ok(())
@@ -45,7 +39,7 @@ impl Storage for SqliteBackend {
 
                 Ok(StorageItem {
                     seq: row.try_read::<i64, _>("seq")? as u64,
-                    data: serde_json::from_str(row.try_read("data")?)?,
+                    data: row.try_read::<&str, _>("data")?.into(),
                 })
             })
             .collect()
