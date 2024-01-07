@@ -81,9 +81,7 @@ fn list(agency: &Agency) -> Result<(), Box<dyn Error>> {
 }
 
 fn load_tasks(agency: &Agency) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
-    let messages = agency.storage().read_all_blocking("todo")?;
-    let tasks = messages
-        .into_iter()
+    let tasks = agency.topic("todo").subscribe()?
         .try_fold(BTreeMap::new(), |mut map, msg| {
             let event: Result<(u64, Option<String>), _> = serde_json::from_value(msg.data);
             match event {

@@ -32,10 +32,6 @@ impl Agency {
         }
     }
 
-    pub fn storage(&self) -> &dyn Storage {
-        self.storage.as_ref()
-    }
-
     pub fn topic(&self, name: &str) -> Topic {
         Topic { name: name.to_owned(), storage: self.storage.clone() }
     }
@@ -49,5 +45,9 @@ pub struct Topic {
 impl Topic {
     pub fn publish(&self, data: Value) -> Result<(), Box<dyn Error>> {
         self.storage.append_blocking(&self.name, OffsetDateTime::now_utc(), data)
-    } 
+    }
+
+    pub fn subscribe(&self) -> Result<impl Iterator<Item = Message>, Box<dyn Error>> {
+        self.storage.read_all_blocking(&self.name).map(|v| v.into_iter())
+    }
 }
