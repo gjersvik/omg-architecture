@@ -4,7 +4,7 @@ use std::{
     error::Error,
 };
 
-use omg_core::{Agency, Storage};
+use omg_core::Agency;
 use time::OffsetDateTime;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -22,9 +22,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Match on the next to decide operation
     match args.next().as_deref() {
-        Some("list") => list(agency.storage()),
-        Some("add") => add(args, agency.storage()),
-        Some("remove") => remove(args, agency.storage()),
+        Some("list") => list(&agency),
+        Some("add") => add(args, &agency),
+        Some("remove") => remove(args, &agency),
         _ => {
             help();
             Ok(())
@@ -44,10 +44,10 @@ fn help() {
     println!("Removes/completes the task with id: id.");
 }
 
-fn remove(mut args: Args, storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
+fn remove(mut args: Args, agency: &Agency) -> Result<(), Box<dyn Error>> {
     if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
         // There we use the blocking version of the remove api. The change will be persisted before return.
-        storage.append_blocking(
+        agency.storage().append_blocking(
             "todo",
             Some(OffsetDateTime::now_utc()),
             serde_json::to_value((id, None::<String>))?,
@@ -59,14 +59,14 @@ fn remove(mut args: Args, storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn add(mut args: Args, storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
+fn add(mut args: Args, agency: &Agency) -> Result<(), Box<dyn Error>> {
     if let Some(task) = args.next() {
-        let next_id = load_tasks(storage)?
+        let next_id = load_tasks(agency)?
             .last_key_value()
             .map(|(id, _)| *id + 1)
             .unwrap_or(1);
 
-        storage.append_blocking(
+        agency.storage().append_blocking(
             "todo",
             Some(OffsetDateTime::now_utc()),
             serde_json::to_value((next_id, Some(&task)))?,
@@ -78,15 +78,15 @@ fn add(mut args: Args, storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn list(storage: &dyn Storage) -> Result<(), Box<dyn Error>> {
-    for (id, task) in load_tasks(storage)?.iter() {
+fn list(agency: &Agency) -> Result<(), Box<dyn Error>> {
+    for (id, task) in load_tasks(agency)?.iter() {
         println!("{id}: {task}");
     }
     Ok(())
 }
 
-fn load_tasks(storage: &dyn Storage) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
-    let messages = storage.read_all_blocking("todo")?;
+fn load_tasks(agency: &Agency) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
+    let messages = agency.storage().read_all_blocking("todo")?;
     let tasks = messages
         .into_iter()
         .try_fold(BTreeMap::new(), |mut map, msg| {
