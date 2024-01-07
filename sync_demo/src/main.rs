@@ -81,16 +81,17 @@ fn list(topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error>> {
 
 fn load_tasks(topic: &Topic<TodoMsg>) -> Result<BTreeMap<u64, String>, Box<dyn Error>> {
     let tasks = topic
-        .subscribe()?
-        .fold(BTreeMap::new(), |mut map, event| match event {
-            (key, Some(value)) => {
+        .subscribe()
+        .try_fold(BTreeMap::new(), |mut map, event| match event {
+            Ok((key, Some(value))) => {
                 map.insert(key, value);
-                map
-            }
-            (key, None) => {
+                Ok(map)
+            },
+            Ok((key, None)) => {
                 map.remove(&key);
-                map
-            }
-        });
+                Ok(map)
+            },
+            Err(err) => Err(err)
+        })?;
     Ok(tasks)
 }
