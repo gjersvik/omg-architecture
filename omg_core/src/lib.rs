@@ -15,7 +15,7 @@ pub trait Storage: Send + Sync {
     fn append_blocking(
         &self,
         topic: &str,
-        created: Option<OffsetDateTime>,
+        created: OffsetDateTime,
         data: Value,
     ) -> Result<(), Box<dyn Error>>;
     fn read_all_blocking(&self, topic: &str) -> Result<Vec<Message>, Box<dyn Error>>;
@@ -48,6 +48,6 @@ pub struct Topic {
 
 impl Topic {
     pub fn publish(&self, data: Value) -> Result<(), Box<dyn Error>> {
-        self.storage.append_blocking(&self.name, Some(OffsetDateTime::now_utc()), data)
+        self.storage.append_blocking(&self.name, OffsetDateTime::now_utc(), data)
     } 
 }

@@ -19,7 +19,7 @@ impl Storage for SqliteBackend {
     fn append_blocking(
         &self,
         topic: &str,
-        created: Option<OffsetDateTime>,
+        created: OffsetDateTime,
         data: Value,
     ) -> Result<(), Box<dyn Error>> {
         let mut statement = self
@@ -37,10 +37,8 @@ impl Storage for SqliteBackend {
             .prepare("INSERT INTO messages VALUES (:topic, :seq, :created, :stored, :data)")?;
         statement.bind((":topic", topic))?;
         statement.bind((":seq", seq))?;
-
-        let stored = OffsetDateTime::now_utc();
-        let created = created.unwrap_or(stored);
         statement.bind((":created", created.unix_timestamp()))?;
+        let stored = OffsetDateTime::now_utc();
         statement.bind((":stored", stored.unix_timestamp()))?;
         statement.bind((":data", data.to_string().as_str()))?;
 
