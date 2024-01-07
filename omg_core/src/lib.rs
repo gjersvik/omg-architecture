@@ -31,7 +31,7 @@ pub trait Storage: Send + Sync {
 
 pub struct Agency {
     storage: Arc<dyn Storage>,
-    _topics: HashMap<Arc<str>, StorageTopic>,
+    topics: HashMap<Arc<str>, StorageTopic>,
 }
 
 impl Agency {
@@ -44,15 +44,22 @@ impl Agency {
 
         Ok(Agency {
             storage: storage.into(),
-            _topics: topics,
+            topics,
         })
     }
 
     pub fn create_topic<M: Message>(&mut self, name: &str) -> Topic<M> {
-        Topic {
-            name: name.to_owned(),
-            storage: self.storage.clone(),
-            _marker: PhantomData,
+        match self.topics.get(name) {
+            Some(s) => Topic::new(s, self.storage.clone()),
+            None => {
+                let topic = StorageTopic {
+                    name: Arc::from(name),
+                    first: 0,
+                    last: 0,
+                };
+                self.topics.insert(topic.name.clone(), topic);
+                self.create_topic(name)
+            }
         }
     }
 }
@@ -62,12 +69,18 @@ pub trait Message: Serialize + for<'a> Deserialize<'a> {}
 impl<T> Message for T where T: Serialize + for<'a> Deserialize<'a> {}
 
 pub struct Topic<M: Message> {
-    name: String,
+    name: Arc<str>,
+    _first: u64,
+    _last: u64,
     storage: Arc<dyn Storage>,
     _marker: PhantomData<M>,
 }
 
 impl<M: Message> Topic<M> {
+    fn new(state: &StorageTopic, storage: Arc<dyn Storage>) -> Self{
+        Topic { name: state.name.clone(), _first: state.first, _last: state.last, storage, _marker: PhantomData }
+    }
+
     pub fn publish(&self, data: M) -> Result<(), Box<dyn Error>> {
         self.storage.append_blocking(
             &self.name,
