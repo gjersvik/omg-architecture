@@ -1,19 +1,15 @@
-use std::{error::Error, path::Path, sync::Arc, thread};
+use std::{error::Error, path::PathBuf, sync::Arc, thread};
 
 use omg_core::{Storage, StorageItem, StorageTopic};
-use sqlite::{Connection, ConnectionThreadSafe, State};
+use sqlite::{Connection, State};
 use tokio::sync::{mpsc, oneshot};
 
-pub fn file_blocking(path: impl AsRef<Path>) -> Result<Box<dyn Storage>, Box<dyn Error>> {
+pub fn file_blocking(path: impl Into<PathBuf>) -> Box<dyn Storage> {
     let (send, recv) = mpsc::unbounded_channel();
+    let path = path.into();
+    thread::spawn(move || backed(recv, path));
 
-    let db = Arc::new(Connection::open_thread_safe(path)?);
-    db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")?;
-
-    let backend_db = db.clone();
-    thread::spawn(move || backed(recv, backend_db));
-
-    Ok(Box::new(SqliteBackend { backend: send }))
+    Box::new(SqliteBackend { backend: send })
 }
 
 enum StorageEvent {
@@ -66,7 +62,10 @@ impl Storage for SqliteBackend {
     }
 }
 
-fn backed(mut events: mpsc::UnboundedReceiver<StorageEvent>, db: Arc<ConnectionThreadSafe>) {
+fn backed(mut events: mpsc::UnboundedReceiver<StorageEvent>, path: PathBuf) {
+    let db = Connection::open(path).unwrap();
+    db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)").unwrap();
+
     while let Some(event) = events.blocking_recv() {
         match event {
             StorageEvent::Topics(reply) => {

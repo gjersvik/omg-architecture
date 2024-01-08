@@ -11,7 +11,7 @@ type TodoMsg = (u64, Option<String>);
 fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
     // In this case we device to use Sqlite as backed and configure it with what file to use.
-    let storage = omg_sqlite::file_blocking("todo.db").unwrap();
+    let storage = omg_sqlite::file_blocking("todo.db");
 
     let mut agency = Agency::load(storage)?;
     let topic = agency.create_topic("todo");
