@@ -12,7 +12,7 @@ pub struct Agency {
 }
 
 impl Agency {
-    pub fn load(storage: StoragePort) -> Result<Self, Box<dyn Error>> {
+    pub fn load(storage: StoragePort) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let mut topics = BTreeMap::new();
         for topic in storage.topics()?.into_iter() {
             let data = storage.read_all_blocking(&topic.name)?;

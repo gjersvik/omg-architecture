@@ -27,12 +27,12 @@ impl<M: Message> Topic<M> {
         }
     }
 
-    pub fn publish(&self, data: M) -> Result<(), Box<dyn Error>> {
+    pub fn publish(&self, data: M) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.core.publish(serde_json::to_string(&data)?)?;
         Ok(())
     }
 
-    pub fn subscribe(&self) -> impl Iterator<Item = Result<M, Box<dyn Error>>> {
+    pub fn subscribe(&self) -> impl Iterator<Item = Result<M, Box<dyn Error + Send + Sync>>> {
         Subscribe::new(self.core.clone())
     }
 }
@@ -55,7 +55,7 @@ impl<M: Message> Subscribe<M> {
 }
 
 impl<M: Message> Iterator for Subscribe<M> {
-    type Item = Result<M, Box<dyn Error>>;
+    type Item = Result<M, Box<dyn Error + Send + Sync>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let value = self.core.get(self.current);
@@ -104,7 +104,7 @@ impl TopicCore {
         Arc::new(topic_core)
     }
 
-    pub fn publish(&self, data: String) -> Result<(), Box<dyn Error>> {
+    pub fn publish(&self, data: String) -> Result<(), Box<dyn Error + Send + Sync>> {
         let _stay_until_after_return = self.atomic_publish.lock().unwrap();
 
         let next = *self.last.borrow() + 1;

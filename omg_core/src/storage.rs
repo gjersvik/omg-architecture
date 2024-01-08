@@ -17,52 +17,59 @@ pub struct StorageTopic {
 }
 
 pub enum StorageEvent {
-    Topics(oneshot::Sender<Result<Vec<StorageTopic>, Box<dyn Error + Send + Sync + 'static>>>),
+    Topics(oneshot::Sender<Result<Vec<StorageTopic>, Box<dyn Error + Send + Sync>>>),
     Push(
         Arc<str>,
         u64,
         Arc<str>,
-        oneshot::Sender<Result<(), Box<dyn Error + Send + Sync + 'static>>>,
+        oneshot::Sender<Result<(), Box<dyn Error + Send + Sync>>>,
     ),
     ReadAll(
         Arc<str>,
-        oneshot::Sender<Result<Vec<StorageItem>, Box<dyn Error + Send + Sync + 'static>>>,
+        oneshot::Sender<Result<Vec<StorageItem>, Box<dyn Error + Send + Sync>>>,
     ),
 }
 
 pub type StoragePort = UnboundedSender<StorageEvent>;
 
 pub(crate) trait Storage: Send + Sync {
-    fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>>;
-    fn append_blocking(&self, topic: &str, seq: u64, data: &str) -> Result<(), Box<dyn Error>>;
-    fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>>;
+    fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error + Send + Sync>>;
+    fn append_blocking(
+        &self,
+        topic: &str,
+        seq: u64,
+        data: &str,
+    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    fn read_all_blocking(
+        &self,
+        topic: &str,
+    ) -> Result<Vec<StorageItem>, Box<dyn Error + Send + Sync>>;
 }
 
 impl Storage for StoragePort {
-    fn append_blocking(&self, topic: &str, seq: u64, data: &str) -> Result<(), Box<dyn Error>> {
+    fn append_blocking(
+        &self,
+        topic: &str,
+        seq: u64,
+        data: &str,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let (send, recv) = oneshot::channel();
-        self.send(StorageEvent::Push(topic.into(), seq, data.into(), send))
-            .expect("Database thread is just gone");
-        recv.blocking_recv()
-            .expect("Database thread is just gone")
-            .map_err(|e| e as Box<dyn Error>)
+        self.send(StorageEvent::Push(topic.into(), seq, data.into(), send))?;
+        recv.blocking_recv()?
     }
 
-    fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>> {
+    fn read_all_blocking(
+        &self,
+        topic: &str,
+    ) -> Result<Vec<StorageItem>, Box<dyn Error + Send + Sync>> {
         let (send, recv) = oneshot::channel();
-        self.send(StorageEvent::ReadAll(topic.into(), send))
-            .expect("Database thread is just gone");
-        recv.blocking_recv()
-            .expect("Database thread is just gone")
-            .map_err(|e| e as Box<dyn Error>)
+        self.send(StorageEvent::ReadAll(topic.into(), send))?;
+        recv.blocking_recv()?
     }
 
-    fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>> {
+    fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error + Send + Sync>> {
         let (send, recv) = oneshot::channel();
-        self.send(StorageEvent::Topics(send))
-            .expect("Database thread is just gone");
-        recv.blocking_recv()
-            .expect("Database thread is just gone")
-            .map_err(|e| e as Box<dyn Error>)
+        self.send(StorageEvent::Topics(send))?;
+        recv.blocking_recv()?
     }
 }
