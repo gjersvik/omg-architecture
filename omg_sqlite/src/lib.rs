@@ -1,10 +1,10 @@
 use std::{error::Error, path::PathBuf, sync::Arc, thread};
 
-use omg_core::{StorageEvent, StorageItem, StorageTopic};
+use omg_core::{StorageEvent, StorageItem, StorageTopic, StoragePort};
 use sqlite::{Connection, State};
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc;
 
-pub fn file(path: impl Into<PathBuf>) -> UnboundedSender<StorageEvent> {
+pub fn file(path: impl Into<PathBuf>) -> StoragePort {
     let (send, recv) = mpsc::unbounded_channel();
     let path = path.into();
     thread::spawn(move || backed(recv, path));

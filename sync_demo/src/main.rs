@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // In this case we device to use Sqlite as backed and configure it with what file to use.
     let storage = omg_sqlite::file("todo.db");
 
-    let mut agency = Agency::load(Box::new(storage))?;
+    let mut agency = Agency::load(storage)?;
     let topic = agency.create_topic("todo");
 
     // Get arguments

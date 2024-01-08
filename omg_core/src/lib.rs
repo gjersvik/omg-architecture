@@ -1,7 +1,7 @@
 mod storage;
 mod topic;
 
-use std::{sync::Arc, collections::BTreeMap, error::Error};
+use std::{collections::BTreeMap, error::Error, sync::Arc};
 
 pub use storage::*;
 pub use topic::*;
@@ -12,8 +12,8 @@ pub struct Agency {
 }
 
 impl Agency {
-    pub fn load(storage: Box<dyn Storage>) -> Result<Self, Box<dyn Error>> {
-        let storage: Arc<dyn Storage> = storage.into();
+    pub fn load(storage: StoragePort) -> Result<Self, Box<dyn Error>> {
+        let storage: Arc<dyn Storage> = Arc::new(storage);
         let mut topics = BTreeMap::new();
         for topic in storage.topics()?.into_iter() {
             let data = storage.read_all_blocking(&topic.name)?;
