@@ -2,6 +2,7 @@ use std::error::Error;
 
 use std::sync::Arc;
 
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
 pub struct StorageItem {
@@ -33,4 +34,33 @@ pub trait Storage: Send + Sync {
     fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>>;
     fn append_blocking(&self, topic: &str, seq: u64, data: &str) -> Result<(), Box<dyn Error>>;
     fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>>;
+}
+
+impl Storage for UnboundedSender<StorageEvent> {
+    fn append_blocking(&self, topic: &str, seq: u64, data: &str) -> Result<(), Box<dyn Error>> {
+        let (send, recv) = oneshot::channel();
+        self.send(StorageEvent::Push(topic.into(), seq, data.into(), send))
+            .expect("Database thread is just gone");
+        recv.blocking_recv()
+            .expect("Database thread is just gone")
+            .map_err(|e| e as Box<dyn Error>)
+    }
+
+    fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>> {
+        let (send, recv) = oneshot::channel();
+        self.send(StorageEvent::ReadAll(topic.into(), send))
+            .expect("Database thread is just gone");
+        recv.blocking_recv()
+            .expect("Database thread is just gone")
+            .map_err(|e| e as Box<dyn Error>)
+    }
+
+    fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>> {
+        let (send, recv) = oneshot::channel();
+        self.send(StorageEvent::Topics(send))
+            .expect("Database thread is just gone");
+        recv.blocking_recv()
+            .expect("Database thread is just gone")
+            .map_err(|e| e as Box<dyn Error>)
+    }
 }

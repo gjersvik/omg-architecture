@@ -1,56 +1,21 @@
 use std::{error::Error, path::PathBuf, sync::Arc, thread};
 
-use omg_core::{Storage, StorageItem, StorageTopic, StorageEvent};
+use omg_core::{StorageEvent, StorageItem, StorageTopic};
 use sqlite::{Connection, State};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc::{self, UnboundedSender};
 
-pub fn file_blocking(path: impl Into<PathBuf>) -> Box<dyn Storage> {
+pub fn file(path: impl Into<PathBuf>) -> UnboundedSender<StorageEvent> {
     let (send, recv) = mpsc::unbounded_channel();
     let path = path.into();
     thread::spawn(move || backed(recv, path));
 
-    Box::new(SqliteBackend { backend: send })
-}
-
-struct SqliteBackend {
-    backend: mpsc::UnboundedSender<StorageEvent>,
-}
-
-impl Storage for SqliteBackend {
-    fn append_blocking(&self, topic: &str, seq: u64, data: &str) -> Result<(), Box<dyn Error>> {
-        let (send, recv) = oneshot::channel();
-        self.backend
-            .send(StorageEvent::Push(topic.into(), seq, data.into(), send))
-            .expect("Database thread is just gone");
-        recv.blocking_recv()
-            .expect("Database thread is just gone")
-            .map_err(|e| e as Box<dyn Error>)
-    }
-
-    fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>> {
-        let (send, recv) = oneshot::channel();
-        self.backend
-            .send(StorageEvent::ReadAll(topic.into(), send))
-            .expect("Database thread is just gone");
-        recv.blocking_recv()
-            .expect("Database thread is just gone")
-            .map_err(|e| e as Box<dyn Error>)
-    }
-
-    fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>> {
-        let (send, recv) = oneshot::channel();
-        self.backend
-            .send(StorageEvent::Topics(send))
-            .expect("Database thread is just gone");
-        recv.blocking_recv()
-            .expect("Database thread is just gone")
-            .map_err(|e| e as Box<dyn Error>)
-    }
+    send
 }
 
 fn backed(mut events: mpsc::UnboundedReceiver<StorageEvent>, path: PathBuf) {
     let db = Connection::open(path).unwrap();
-    db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)").unwrap();
+    db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")
+        .unwrap();
 
     while let Some(event) = events.blocking_recv() {
         match event {

@@ -11,9 +11,9 @@ type TodoMsg = (u64, Option<String>);
 fn main() -> Result<(), Box<dyn Error>> {
     // Before the main application starts we configure the Agency using crates that implements features.
     // In this case we device to use Sqlite as backed and configure it with what file to use.
-    let storage = omg_sqlite::file_blocking("todo.db");
+    let storage = omg_sqlite::file("todo.db");
 
-    let mut agency = Agency::load(storage)?;
+    let mut agency = Agency::load(Box::new(storage))?;
     let topic = agency.create_topic("todo");
 
     // Get arguments
@@ -86,12 +86,12 @@ fn load_tasks(topic: &Topic<TodoMsg>) -> Result<BTreeMap<u64, String>, Box<dyn E
             Ok((key, Some(value))) => {
                 map.insert(key, value);
                 Ok(map)
-            },
+            }
             Ok((key, None)) => {
                 map.remove(&key);
                 Ok(map)
-            },
-            Err(err) => Err(err)
+            }
+            Err(err) => Err(err),
         })?;
     Ok(tasks)
 }
