@@ -13,7 +13,7 @@ pub fn file_blocking(path: impl AsRef<Path>) -> Result<Box<dyn Storage>, Box<dyn
     let backend_db = db.clone();
     thread::spawn(move || backed(recv, backend_db));
 
-    Ok(Box::new(SqliteBackend { db, backend: send }))
+    Ok(Box::new(SqliteBackend { backend: send }))
 }
 
 enum StorageEvent {
@@ -24,10 +24,13 @@ enum StorageEvent {
         Arc<str>,
         oneshot::Sender<Result<(), Box<dyn Error + Send + Sync + 'static>>>,
     ),
+    ReadAll(
+        Arc<str>,
+        oneshot::Sender<Result<Vec<StorageItem>, Box<dyn Error + Send + Sync + 'static>>>,
+    ),
 }
 
 struct SqliteBackend {
-    db: Arc<ConnectionThreadSafe>,
     backend: mpsc::UnboundedSender<StorageEvent>,
 }
 
@@ -43,22 +46,13 @@ impl Storage for SqliteBackend {
     }
 
     fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>> {
-        let mut statement = self
-            .db
-            .prepare("SELECT seq, data FROM messages WHERE topic = ? ORDER BY seq ASC")?;
-        statement.bind((1, topic))?;
-
-        statement
-            .into_iter()
-            .map(|row| {
-                let row = row?;
-
-                Ok(StorageItem {
-                    seq: row.try_read::<i64, _>("seq")? as u64,
-                    data: row.try_read::<&str, _>("data")?.into(),
-                })
-            })
-            .collect()
+        let (send, recv) = oneshot::channel();
+        self.backend
+            .send(StorageEvent::ReadAll(topic.into(), send))
+            .expect("Database thread is just gone");
+        recv.blocking_recv()
+            .expect("Database thread is just gone")
+            .map_err(|e| e as Box<dyn Error>)
     }
 
     fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>> {
@@ -80,6 +74,9 @@ fn backed(mut events: mpsc::UnboundedReceiver<StorageEvent>, db: Arc<ConnectionT
             }
             StorageEvent::Push(topic, seq, data, reply) => {
                 let _ = reply.send(push(&db, &topic, seq, &data));
+            }
+            StorageEvent::ReadAll(topic, reply) => {
+                let _ = reply.send(read_all(&db, &topic));
             }
         }
     }
@@ -116,4 +113,25 @@ fn push(
 
     while statement.next()? != State::Done {}
     Ok(())
+}
+
+fn read_all(
+    db: &Connection,
+    topic: &str,
+) -> Result<Vec<StorageItem>, Box<dyn Error + Send + Sync>> {
+    let mut statement =
+        db.prepare("SELECT seq, data FROM messages WHERE topic = ? ORDER BY seq ASC")?;
+    statement.bind((1, topic))?;
+
+    statement
+        .into_iter()
+        .map(|row| {
+            let row = row?;
+
+            Ok(StorageItem {
+                seq: row.try_read::<i64, _>("seq")? as u64,
+                data: row.try_read::<&str, _>("data")?.into(),
+            })
+        })
+        .collect()
 }
