@@ -2,7 +2,7 @@ use std::{error::Error, path::Path, sync::Arc, thread};
 
 use omg_core::{Storage, StorageItem, StorageTopic};
 use sqlite::{Connection, ConnectionThreadSafe, State};
-use tokio::sync::{oneshot, mpsc};
+use tokio::sync::{mpsc, oneshot};
 
 pub fn file_blocking(path: impl AsRef<Path>) -> Result<Box<dyn Storage>, Box<dyn Error>> {
     let (send, recv) = mpsc::unbounded_channel();
@@ -13,31 +13,33 @@ pub fn file_blocking(path: impl AsRef<Path>) -> Result<Box<dyn Storage>, Box<dyn
     let backend_db = db.clone();
     thread::spawn(move || backed(recv, backend_db));
 
-    Ok(Box::new(SqliteBackend { db, backend: send}))
+    Ok(Box::new(SqliteBackend { db, backend: send }))
 }
 
 enum StorageEvent {
-    Topics(oneshot::Sender<Result<Vec<StorageTopic>, Box<dyn Error + Send + Sync + 'static>>>)
+    Topics(oneshot::Sender<Result<Vec<StorageTopic>, Box<dyn Error + Send + Sync + 'static>>>),
+    Push(
+        Arc<str>,
+        u64,
+        Arc<str>,
+        oneshot::Sender<Result<(), Box<dyn Error + Send + Sync + 'static>>>,
+    ),
 }
 
 struct SqliteBackend {
     db: Arc<ConnectionThreadSafe>,
-    backend: mpsc::UnboundedSender<StorageEvent>
+    backend: mpsc::UnboundedSender<StorageEvent>,
 }
-
-
 
 impl Storage for SqliteBackend {
     fn append_blocking(&self, topic: &str, seq: u64, data: &str) -> Result<(), Box<dyn Error>> {
-        let mut statement = self
-            .db
-            .prepare("INSERT INTO messages VALUES (:topic, :seq, :data)")?;
-        statement.bind((":topic", topic))?;
-        statement.bind((":seq", seq as i64))?;
-        statement.bind((":data", data))?;
-
-        while statement.next()? != State::Done {}
-        Ok(())
+        let (send, recv) = oneshot::channel();
+        self.backend
+            .send(StorageEvent::Push(topic.into(), seq, data.into(), send))
+            .expect("Database thread is just gone");
+        recv.blocking_recv()
+            .expect("Database thread is just gone")
+            .map_err(|e| e as Box<dyn Error>)
     }
 
     fn read_all_blocking(&self, topic: &str) -> Result<Vec<StorageItem>, Box<dyn Error>> {
@@ -61,18 +63,24 @@ impl Storage for SqliteBackend {
 
     fn topics(&self) -> Result<Vec<StorageTopic>, Box<dyn Error>> {
         let (send, recv) = oneshot::channel();
-        self.backend.send(StorageEvent::Topics(send)).expect("Database thread is just gone");
-        recv.blocking_recv().expect("Database thread is just gone").map_err(|e|e as Box<dyn Error>)
+        self.backend
+            .send(StorageEvent::Topics(send))
+            .expect("Database thread is just gone");
+        recv.blocking_recv()
+            .expect("Database thread is just gone")
+            .map_err(|e| e as Box<dyn Error>)
     }
 }
-
 
 fn backed(mut events: mpsc::UnboundedReceiver<StorageEvent>, db: Arc<ConnectionThreadSafe>) {
     while let Some(event) = events.blocking_recv() {
         match event {
             StorageEvent::Topics(reply) => {
                 let _ = reply.send(topics(&db));
-            },
+            }
+            StorageEvent::Push(topic, seq, data, reply) => {
+                let _ = reply.send(push(&db, &topic, seq, &data));
+            }
         }
     }
 }
@@ -93,4 +101,19 @@ fn topics(db: &Connection) -> Result<Vec<StorageTopic>, Box<dyn Error + Send + S
             })
         })
         .collect()
+}
+
+fn push(
+    db: &Connection,
+    topic: &str,
+    seq: u64,
+    data: &str,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let mut statement = db.prepare("INSERT INTO messages VALUES (:topic, :seq, :data)")?;
+    statement.bind((":topic", topic))?;
+    statement.bind((":seq", seq as i64))?;
+    statement.bind((":data", data))?;
+
+    while statement.next()? != State::Done {}
+    Ok(())
 }
