@@ -1,6 +1,6 @@
 use std::{error::Error, path::PathBuf, sync::Arc, thread};
 
-use omg_core::{Storage, StorageItem, StorageTopic};
+use omg_core::{Storage, StorageItem, StorageTopic, StorageEvent};
 use sqlite::{Connection, State};
 use tokio::sync::{mpsc, oneshot};
 
@@ -10,20 +10,6 @@ pub fn file_blocking(path: impl Into<PathBuf>) -> Box<dyn Storage> {
     thread::spawn(move || backed(recv, path));
 
     Box::new(SqliteBackend { backend: send })
-}
-
-enum StorageEvent {
-    Topics(oneshot::Sender<Result<Vec<StorageTopic>, Box<dyn Error + Send + Sync + 'static>>>),
-    Push(
-        Arc<str>,
-        u64,
-        Arc<str>,
-        oneshot::Sender<Result<(), Box<dyn Error + Send + Sync + 'static>>>,
-    ),
-    ReadAll(
-        Arc<str>,
-        oneshot::Sender<Result<Vec<StorageItem>, Box<dyn Error + Send + Sync + 'static>>>,
-    ),
 }
 
 struct SqliteBackend {
