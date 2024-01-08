@@ -4,6 +4,7 @@ mod topic;
 use std::{collections::BTreeMap, error::Error, sync::Arc};
 
 pub use storage::*;
+use tokio::sync::oneshot;
 pub use topic::*;
 
 pub struct Agency {
@@ -14,7 +15,9 @@ pub struct Agency {
 impl Agency {
     pub fn load(storage: StoragePort) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let mut topics = BTreeMap::new();
-        for topic in storage.topics()?.into_iter() {
+        let (send, recv) = oneshot::channel();
+        storage.send(StorageEvent::Topics(send))?;
+        for topic in recv.blocking_recv()??.into_iter() {
             let data = storage.read_all_blocking(&topic.name)?;
             topics.insert(
                 topic.name.clone(),
