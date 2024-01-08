@@ -18,7 +18,9 @@ impl Agency {
         let (send, recv) = oneshot::channel();
         storage.send(StorageEvent::Topics(send))?;
         for topic in recv.blocking_recv()??.into_iter() {
-            let data = storage.read_all_blocking(&topic.name)?;
+            let (send, recv) = oneshot::channel();
+            storage.send(StorageEvent::ReadAll(topic.name.clone(), send))?;
+            let data = recv.blocking_recv()??;
             topics.insert(
                 topic.name.clone(),
                 TopicCore::new(topic, data, storage.clone()),
