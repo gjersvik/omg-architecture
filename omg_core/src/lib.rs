@@ -7,13 +7,12 @@ pub use storage::*;
 pub use topic::*;
 
 pub struct Agency {
-    storage: Arc<dyn Storage>,
+    storage: StoragePort,
     topics: BTreeMap<Arc<str>, Arc<TopicCore>>,
 }
 
 impl Agency {
     pub fn load(storage: StoragePort) -> Result<Self, Box<dyn Error>> {
-        let storage: Arc<dyn Storage> = Arc::new(storage);
         let mut topics = BTreeMap::new();
         for topic in storage.topics()?.into_iter() {
             let data = storage.read_all_blocking(&topic.name)?;

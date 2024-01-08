@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
-use crate::{Storage, StorageTopic, StorageItem};
+use crate::{Storage, StorageItem, StoragePort, StorageTopic};
 
 pub trait Message: Serialize + for<'a> Deserialize<'a> {}
 
@@ -70,7 +70,7 @@ pub(crate) struct TopicCore {
     name: Arc<str>,
     first: watch::Sender<u64>,
     last: watch::Sender<u64>,
-    storage: Arc<dyn Storage>,
+    storage: StoragePort,
     cache: Mutex<BTreeMap<u64, Arc<str>>>,
     atomic_publish: Mutex<()>,
 }
@@ -79,7 +79,7 @@ impl TopicCore {
     pub fn new(
         topic: StorageTopic,
         data: Vec<StorageItem>,
-        storage: Arc<dyn Storage>,
+        storage: StoragePort,
     ) -> Arc<TopicCore> {
         let topic_core = TopicCore {
             name: topic.name,
@@ -92,7 +92,7 @@ impl TopicCore {
         Arc::new(topic_core)
     }
 
-    pub fn empty(name: Arc<str>, storage: Arc<dyn Storage>) -> Arc<TopicCore> {
+    pub fn empty(name: Arc<str>, storage: StoragePort) -> Arc<TopicCore> {
         let topic_core = TopicCore {
             name,
             first: watch::Sender::new(1),
