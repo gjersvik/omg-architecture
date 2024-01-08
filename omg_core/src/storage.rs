@@ -33,12 +33,6 @@ pub enum StorageEvent {
 pub type StoragePort = UnboundedSender<StorageEvent>;
 
 pub(crate) trait Storage: Send + Sync {
-    fn append_blocking(
-        &self,
-        topic: &str,
-        seq: u64,
-        data: &str,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
     fn read_all_blocking(
         &self,
         topic: &str,
@@ -46,17 +40,6 @@ pub(crate) trait Storage: Send + Sync {
 }
 
 impl Storage for StoragePort {
-    fn append_blocking(
-        &self,
-        topic: &str,
-        seq: u64,
-        data: &str,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let (send, recv) = oneshot::channel();
-        self.send(StorageEvent::Push(topic.into(), seq, data.into(), send))?;
-        recv.blocking_recv()?
-    }
-
     fn read_all_blocking(
         &self,
         topic: &str,

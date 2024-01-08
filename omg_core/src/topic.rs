@@ -6,9 +6,9 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 
-use crate::{Storage, StorageItem, StoragePort, StorageTopic};
+use crate::{StorageEvent, StorageItem, StoragePort, StorageTopic};
 
 pub trait Message: Serialize + for<'a> Deserialize<'a> {}
 
@@ -108,11 +108,19 @@ impl TopicCore {
         let _stay_until_after_return = self.atomic_publish.lock().unwrap();
 
         let next = *self.last.borrow() + 1;
+        let data: Arc<str> = data.into();
         // Save to disk
-        self.storage.append_blocking(&self.name, next, &data)?;
+        let (send, recv) = oneshot::channel();
+        self.storage.send(StorageEvent::Push(
+            self.name.clone(),
+            next,
+            data.clone(),
+            send,
+        ))?;
+        recv.blocking_recv()??;
         // Save to cache
         {
-            self.cache.lock().unwrap().insert(next, data.into());
+            self.cache.lock().unwrap().insert(next, data);
         }
         // Update last.
         self.last.send_replace(next);
