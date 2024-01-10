@@ -1,5 +1,5 @@
-# OMG Toolbox
-A set of libraries that implements my personal preferences.
+# OMG Agents
+An actors inspired library without its own runtime.
 
 ## The problem
 
@@ -14,41 +14,27 @@ And there modes are poisonous to etch other and have to live in different treads
 
 ## Goals
 
-Create a toolbox set of tools that can work in any context and enable communication between contexts. 
+Create an architecture pattern as library. Where i can write environment agnostics code. That can easily run inside one or more run-times. In the same application or over the network. 
 
-Having an kafka-esk topic where one or more publisher can post messages to a topic. And one or more readers can read from a true the history using a local cursor. Topics comes in 3 main types:
-* At most once: Maximum throughput, minium latency, no durability. Set how many messages to remember default 1. No history can only read the latest message.
-* At lest once: Good balance between speed and durability. Can set the minium time a message should be durable default 1 week. 
-* Exactly once: When only durability matters. No settings all messages are stored until the topic as a hole is deleted.  
-
-Save state using event sourcing on exactly once topic.
-
-Both reader and writer have async, sync and non-blocking api.
+Right now i have 3 tings i want to abstract over:
+1. State-management. Be able to persist state and having it just be there when i restart the application.
+2. Networking. Message passing between tasks, treads and computers.
+3. Runtime agnostics business logic. Using my own take on the actor pattern.
 
 ## Architecture
-I like actor frameworks but don't like that they are frameworks. So I will work around a concept I call agent. As in I need to call my agent. Agents can publish and subscribe to topics. And they can have there own key value state.
+The man tool for runtime agnostic code is channels and treads. Channels allows me to send messages between different contexts. And treads allows me to escape the current context. (Except in web browsers.)
 
-The top level struct/object is an Agency that is injected with backends that enables features. The agency can live as global variable in a project. From the user side the Agency is where you get agents from.
+On the top is Agents. Agents process messages and have a typed Input and Output message type. So for every message it can modify its own state or generate 0 or more output messages. But Agents do not part of a runtime so some external code need to tell the agent when to process messages. Also however drives the agent can get an immutable reference to its internal state.
 
-The users of Agents and Agency should not need to know about the backends. So the backend capabilities will be injected in a type erased fashion. As in using trait objects and not generics.
+Agents can listen to channels and you give it at mapping function on subscribe. Can also publish output messages to one or more channels using a mapping function. 
 
-The Agency also keeps common state for all agents. Will in most cases be a singleton but multiple can coexist say when testing. 
+Agents can be put into an Agency. Allows multiple agents to be run in framework native way or background treads. It is not possible to get handle to internal state of any agents that exists in the runtime. There is no way to know when an agent in an agency changes it state. But it is possible to remove and inject and agent from an agency.
 
-## Packages
-This project is separated out into different packages for mostly to enable working in different environments with different requirements. 
+There is a special form of channel called a log. Where a channel deletes its messages after everyone have read it. Logs persists messages using a event store service. This allows new subscribes to read all messages not only the ones that happened after they subscribed.
 
-### Core
-The omg_core package with contain the agent and agency struct. And all the traits needed by backend crates. Will also contain simple mock backends for used in testing and as null backends. 
+Some agents are persisted agents that can store its state using a log. The log is replayed to the agent at creation.
 
-Will have minimal dependencies.
-
-### Sqlite Storage backend.
-The omg_sqlite package will implement the storage trait using sqlite.
-
-### Three demo/example apps.
-* async_demo Todo app running as an async web app server.
-* sync_demo Todo app running as cli application.
-* non_blocking_demo Todo app running as egui app.
+Services exist to connect to external code. They are represented as two channels that forms a Input output pair. If to services implements the same type of io channel they are equivalent. In this way the core code can be runtime agnostic.
 
 ## Todo list for Minimal Viable Toolkit
 1. Create the preferred syntax for the sync demo. With a fake toolbox.
