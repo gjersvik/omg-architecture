@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     env::{self, Args},
     error::Error,
+    mem,
 };
 
 use omg_core::{Agency, Agent, State, Topic};
@@ -9,8 +10,7 @@ use omg_core::{Agency, Agent, State, Topic};
 type TodoMsg = (u64, Option<String>);
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    // Before the main application starts we configure the Agency using crates that implements features.
-    // In this case we device to use Sqlite as backed and configure it with what file to use.
+    // Setup the environment
     let storage = omg_sqlite::file("todo.db");
 
     let mut agency = Agency::load(storage)?;
@@ -18,29 +18,25 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let events = load(&topic)?;
 
     let mut agent = Agent::new(Todo(BTreeMap::new()));
+    let mut outputs = agent.subscribe();
     for event in events {
         agent.message(event);
     }
 
-    // Get arguments
+    // Run the current command
     let mut args = env::args();
-
-    // Remove the first one don't need to know the executable
     args.next();
-
-    // Match on the next to decide operation
     match args.next().as_deref() {
-        Some("list") => {
-            list(&agent);
-            Ok(())
-        }
-        Some("add") => add(args, &topic, &agent),
-        Some("remove") => remove(args, &topic),
-        _ => {
-            help();
-            Ok(())
-        }
-    }
+        Some("list") => list(&agent),
+        Some("add") => add(args, &topic, &agent)?,
+        Some("remove") => remove(args, &topic)?,
+        _ => help(),
+    };
+    mem::drop(agent);
+
+    // Handle the results.
+    while outputs.recv().is_some() {}
+    Ok(())
 }
 
 enum TodoInput {
