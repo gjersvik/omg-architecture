@@ -34,17 +34,21 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 }
 
+enum TodoInput{
+    Load(u64, Option<String>)
+}
+
 struct Todo(BTreeMap<u64, String>);
 
+
 impl State for Todo {
-    type Input = TodoMsg;
+    type Input = TodoInput;
     type Output = ();
 
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output> {
-        let (key, value) = msg;
-        match value {
-            Some(value) => self.0.insert(key, value),
-            None => self.0.remove(&key),
+        match msg {
+            TodoInput::Load(key, Some(value) ) => self.0.insert(key, value),
+            TodoInput::Load(key, None ) => self.0.remove(&key)
         };
         Vec::new()
     }
@@ -104,7 +108,7 @@ fn load_tasks(topic: &Topic<TodoMsg>) -> Result<Agent<Todo>, Box<dyn Error + Sen
         .subscribe()
         .try_fold(agent, |mut agent, event| match event {
             Ok(msg) => {
-                agent.message(msg);
+                agent.message(TodoInput::Load(msg.0, msg.1));
                 Ok(agent)
             }
             Err(err) => Err(err),
