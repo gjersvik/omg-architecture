@@ -34,12 +34,11 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 }
 
-enum TodoInput{
-    Load(u64, Option<String>)
+enum TodoInput {
+    Load(u64, Option<String>),
 }
 
 struct Todo(BTreeMap<u64, String>);
-
 
 impl State for Todo {
     type Input = TodoInput;
@@ -47,8 +46,8 @@ impl State for Todo {
 
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output> {
         match msg {
-            TodoInput::Load(key, Some(value) ) => self.0.insert(key, value),
-            TodoInput::Load(key, None ) => self.0.remove(&key)
+            TodoInput::Load(key, Some(value)) => self.0.insert(key, value),
+            TodoInput::Load(key, None) => self.0.remove(&key),
         };
         Vec::new()
     }
@@ -102,16 +101,17 @@ fn list(topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Send + Sync>> {
 }
 
 fn load_tasks(topic: &Topic<TodoMsg>) -> Result<Agent<Todo>, Box<dyn Error + Send + Sync>> {
-    let agent = Agent::new(Todo(BTreeMap::new()));
+    let mut agent = Agent::new(Todo(BTreeMap::new()));
+    let events = load(topic)?;
+    for event in events {
+        agent.message(event)
+    }
+    Ok(agent)
+}
 
-    let tasks = topic
+fn load(topic: &Topic<TodoMsg>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
+    topic
         .subscribe()
-        .try_fold(agent, |mut agent, event| match event {
-            Ok(msg) => {
-                agent.message(TodoInput::Load(msg.0, msg.1));
-                Ok(agent)
-            }
-            Err(err) => Err(err),
-        })?;
-    Ok(tasks)
+        .map(|msg| msg.map(|(key, value)| TodoInput::Load(key, value)))
+        .collect()
 }
