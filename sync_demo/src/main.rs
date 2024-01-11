@@ -4,7 +4,7 @@ use std::{
     error::Error,
 };
 
-use omg_core::{Agency, Topic};
+use omg_core::{Agency, Agent, State, Topic};
 
 type TodoMsg = (u64, Option<String>);
 
@@ -34,6 +34,22 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 }
 
+struct Todo(BTreeMap<u64, String>);
+
+impl State for Todo {
+    type Input = TodoMsg;
+    type Output = ();
+
+    fn handle(&mut self, msg: Self::Input) -> Vec<Self::Input> {
+        let (key, value) = msg;
+        match value {
+            Some(value) => self.0.insert(key, value),
+            None => self.0.remove(&key),
+        };
+        Vec::new()
+    }
+}
+
 fn help() {
     // Just printing som help text nothing relevant to toolbox
 
@@ -60,6 +76,8 @@ fn remove(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + 
 fn add(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Send + Sync>> {
     if let Some(task) = args.next() {
         let next_id = load_tasks(topic)?
+            .state()
+            .0
             .last_key_value()
             .map(|(id, _)| *id + 1)
             .unwrap_or(1);
@@ -73,25 +91,21 @@ fn add(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Sen
 }
 
 fn list(topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Send + Sync>> {
-    for (id, task) in load_tasks(topic)?.iter() {
+    for (id, task) in load_tasks(topic)?.state().0.iter() {
         println!("{id}: {task}");
     }
     Ok(())
 }
 
-fn load_tasks(
-    topic: &Topic<TodoMsg>,
-) -> Result<BTreeMap<u64, String>, Box<dyn Error + Send + Sync>> {
+fn load_tasks(topic: &Topic<TodoMsg>) -> Result<Agent<Todo>, Box<dyn Error + Send + Sync>> {
+    let agent = Agent::new(Todo(BTreeMap::new()));
+
     let tasks = topic
         .subscribe()
-        .try_fold(BTreeMap::new(), |mut map, event| match event {
-            Ok((key, Some(value))) => {
-                map.insert(key, value);
-                Ok(map)
-            }
-            Ok((key, None)) => {
-                map.remove(&key);
-                Ok(map)
+        .try_fold(agent, |mut agent, event| match event {
+            Ok(msg) => {
+                agent.message(msg);
+                Ok(agent)
             }
             Err(err) => Err(err),
         })?;
