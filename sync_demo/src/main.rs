@@ -15,6 +15,12 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let mut agency = Agency::load(storage)?;
     let topic = agency.create_topic("todo");
+    let events = load(&topic)?;
+
+    let mut agent = Agent::new(Todo(BTreeMap::new()));
+    for event in events {
+        agent.message(event);
+    }
 
     // Get arguments
     let mut args = env::args();
@@ -24,8 +30,11 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     // Match on the next to decide operation
     match args.next().as_deref() {
-        Some("list") => list(&topic),
-        Some("add") => add(args, &topic),
+        Some("list") => {
+            list(&agent);
+            Ok(())
+        }
+        Some("add") => add(args, &topic, &agent),
         Some("remove") => remove(args, &topic),
         _ => {
             help();
@@ -76,9 +85,13 @@ fn remove(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + 
     Ok(())
 }
 
-fn add(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Send + Sync>> {
+fn add(
+    mut args: Args,
+    topic: &Topic<TodoMsg>,
+    agent: &Agent<Todo>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     if let Some(task) = args.next() {
-        let next_id = load_tasks(topic)?
+        let next_id = agent
             .state()
             .0
             .last_key_value()
@@ -93,20 +106,10 @@ fn add(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Sen
     Ok(())
 }
 
-fn list(topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Send + Sync>> {
-    for (id, task) in load_tasks(topic)?.state().0.iter() {
+fn list(agent: &Agent<Todo>) {
+    for (id, task) in agent.state().0.iter() {
         println!("{id}: {task}");
     }
-    Ok(())
-}
-
-fn load_tasks(topic: &Topic<TodoMsg>) -> Result<Agent<Todo>, Box<dyn Error + Send + Sync>> {
-    let mut agent = Agent::new(Todo(BTreeMap::new()));
-    let events = load(topic)?;
-    for event in events {
-        agent.message(event)
-    }
-    Ok(agent)
 }
 
 fn load(topic: &Topic<TodoMsg>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
