@@ -2,6 +2,7 @@ use std::error::Error;
 
 use std::sync::Arc;
 
+use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
@@ -17,7 +18,7 @@ pub struct StorageTopic {
 }
 
 pub enum StorageEvent {
-    Topics(oneshot::Sender<Result<Vec<StorageTopic>, Box<dyn Error + Send + Sync>>>),
+    Topics(oneshot::Sender<Result<Vec<StorageTopic>, StorageError>>),
     Push(
         Arc<str>,
         u64,
@@ -31,3 +32,13 @@ pub enum StorageEvent {
 }
 
 pub type StoragePort = UnboundedSender<StorageEvent>;
+
+#[derive(Error, Debug, Clone)]
+#[error(transparent)]
+pub struct StorageError(Arc<dyn Error + Send + Sync>);
+
+impl From<Box<dyn Error + Send + Sync>> for StorageError{
+    fn from(value: Box<dyn Error + Send + Sync>) -> Self {
+        StorageError(value.into())
+    }
+}

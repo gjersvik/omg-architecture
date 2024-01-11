@@ -1,6 +1,6 @@
 use std::{error::Error, path::PathBuf, sync::Arc, thread};
 
-use omg_core::{StorageEvent, StorageItem, StorageTopic, StoragePort};
+use omg_core::{StorageEvent, StorageItem, StorageTopic, StoragePort, StorageError};
 use sqlite::{Connection, State};
 use tokio::sync::mpsc;
 
@@ -20,7 +20,7 @@ fn backed(mut events: mpsc::UnboundedReceiver<StorageEvent>, path: PathBuf) {
     while let Some(event) = events.blocking_recv() {
         match event {
             StorageEvent::Topics(reply) => {
-                let _ = reply.send(topics(&db));
+                let _ = reply.send(topics(&db).into_storage_error());
             }
             StorageEvent::Push(topic, seq, data, reply) => {
                 let _ = reply.send(push(&db, &topic, seq, &data));
@@ -84,4 +84,14 @@ fn read_all(
             })
         })
         .collect()
+}
+
+trait IntoStorageError<T> {
+    fn into_storage_error(self) -> Result<T, StorageError>;
+}
+
+impl<T> IntoStorageError<T> for Result<T, Box<dyn Error + Send + Sync>>  {
+    fn into_storage_error(self) -> Result<T, StorageError> {
+        self.map_err(Into::into)
+    }
 }
