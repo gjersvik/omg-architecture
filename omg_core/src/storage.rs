@@ -23,11 +23,11 @@ pub enum StorageEvent {
         Arc<str>,
         u64,
         Arc<str>,
-        oneshot::Sender<Result<(), Box<dyn Error + Send + Sync>>>,
+        oneshot::Sender<Result<(), StorageError>>,
     ),
     ReadAll(
         Arc<str>,
-        oneshot::Sender<Result<Vec<StorageItem>, Box<dyn Error + Send + Sync>>>,
+        oneshot::Sender<Result<Vec<StorageItem>, StorageError>>,
     ),
 }
 
@@ -37,7 +37,7 @@ pub type StoragePort = UnboundedSender<StorageEvent>;
 #[error(transparent)]
 pub struct StorageError(Arc<dyn Error + Send + Sync>);
 
-impl From<Box<dyn Error + Send + Sync>> for StorageError{
+impl From<Box<dyn Error + Send + Sync>> for StorageError {
     fn from(value: Box<dyn Error + Send + Sync>) -> Self {
         StorageError(value.into())
     }
