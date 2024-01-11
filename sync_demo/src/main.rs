@@ -40,7 +40,7 @@ impl State for Todo {
     type Input = TodoMsg;
     type Output = ();
 
-    fn handle(&mut self, msg: Self::Input) -> Vec<Self::Input> {
+    fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output> {
         let (key, value) = msg;
         match value {
             Some(value) => self.0.insert(key, value),
