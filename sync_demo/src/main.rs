@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut args = env::args();
     args.next();
     match args.next().as_deref() {
-        Some("list") => list(&agent),
+        Some("list") => agent.message(TodoInput::List),
         Some("add") => add(args, &topic, &agent)?,
         Some("remove") => remove(args, &topic)?,
         _ => agent.message(TodoInput::Help),
@@ -45,6 +45,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 enum TodoInput {
     Help,
+    List,
     Load(u64, Option<String>),
 }
 
@@ -80,6 +81,11 @@ impl State for Todo {
                 self.0.remove(&key);
                 Vec::new()
             }
+            TodoInput::List => self
+                .0
+                .iter()
+                .map(|(id, task)| TodoOutput::PrintLine(format!("{id}: {task}")))
+                .collect(),
         }
     }
 }
@@ -114,12 +120,6 @@ fn add(
         println!("No task was provided. sync_demo add [task]")
     }
     Ok(())
-}
-
-fn list(agent: &Agent<Todo>) {
-    for (id, task) in agent.state().0.iter() {
-        println!("{id}: {task}");
-    }
 }
 
 fn load(topic: &Topic<TodoMsg>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
