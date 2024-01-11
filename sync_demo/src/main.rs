@@ -30,44 +30,58 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         Some("list") => list(&agent),
         Some("add") => add(args, &topic, &agent)?,
         Some("remove") => remove(args, &topic)?,
-        _ => help(),
+        _ => agent.message(TodoInput::Help),
     };
     mem::drop(agent);
 
     // Handle the results.
-    while outputs.recv().is_some() {}
+    while let Some(msg) = outputs.recv() {
+        match msg {
+            TodoOutput::PrintLine(s) => println!("{s}"),
+        }
+    }
     Ok(())
 }
 
 enum TodoInput {
+    Help,
     Load(u64, Option<String>),
+}
+
+#[derive(Debug, Clone)]
+enum TodoOutput {
+    PrintLine(String),
 }
 
 struct Todo(BTreeMap<u64, String>);
 
 impl State for Todo {
     type Input = TodoInput;
-    type Output = ();
+    type Output = TodoOutput;
 
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output> {
         match msg {
-            TodoInput::Load(key, Some(value)) => self.0.insert(key, value),
-            TodoInput::Load(key, None) => self.0.remove(&key),
-        };
-        Vec::new()
+            TodoInput::Help => {
+                vec![
+                    TodoOutput::PrintLine("Help for Sync demo todo app".to_owned()),
+                    TodoOutput::PrintLine("sync_demo list".to_owned()),
+                    TodoOutput::PrintLine("Will list all the active todo items.".to_owned()),
+                    TodoOutput::PrintLine("sync_demo add [task]".to_owned()),
+                    TodoOutput::PrintLine("Adds task to the todo lists.".to_owned()),
+                    TodoOutput::PrintLine("sync_demo remove [id]".to_owned()),
+                    TodoOutput::PrintLine("Removes/completes the task with id: id.".to_owned()),
+                ]
+            }
+            TodoInput::Load(key, Some(value)) => {
+                self.0.insert(key, value);
+                Vec::new()
+            }
+            TodoInput::Load(key, None) => {
+                self.0.remove(&key);
+                Vec::new()
+            }
+        }
     }
-}
-
-fn help() {
-    // Just printing som help text nothing relevant to toolbox
-
-    println!("Help for Sync demo todo app");
-    println!("sync_demo list");
-    println!("Will list all the active todo items.");
-    println!("sync_demo add [task]");
-    println!("Adds task to the todo lists.");
-    println!("sync_demo remove [id]");
-    println!("Removes/completes the task with id: id.");
 }
 
 fn remove(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Send + Sync>> {
