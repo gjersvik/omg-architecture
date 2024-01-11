@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     args.next();
     match args.next().as_deref() {
         Some("list") => agent.message(TodoInput::List),
-        Some("add") => add(args, &topic, &agent)?,
+        Some("add") => add(args, &mut agent),
         Some("remove") => remove(args, &topic)?,
         _ => agent.message(TodoInput::Help),
     };
@@ -38,6 +38,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     while let Some(msg) = outputs.recv() {
         match msg {
             TodoOutput::PrintLine(s) => println!("{s}"),
+            TodoOutput::Publish(key, value) => topic.publish((key, value))?,
         }
     }
     Ok(())
@@ -46,12 +47,14 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 enum TodoInput {
     Help,
     List,
+    Add(String),
     Load(u64, Option<String>),
 }
 
 #[derive(Debug, Clone)]
 enum TodoOutput {
     PrintLine(String),
+    Publish(u64, Option<String>),
 }
 
 struct Todo(BTreeMap<u64, String>);
@@ -86,6 +89,13 @@ impl State for Todo {
                 .iter()
                 .map(|(id, task)| TodoOutput::PrintLine(format!("{id}: {task}")))
                 .collect(),
+            TodoInput::Add(task) => {
+                let next_id = self.0.last_key_value().map(|(id, _)| *id + 1).unwrap_or(1);
+                vec![
+                    TodoOutput::Publish(next_id, Some(task.clone())),
+                    TodoOutput::PrintLine(format!("Added {task} with id {next_id}")),
+                ]
+            }
         }
     }
 }
@@ -101,25 +111,12 @@ fn remove(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + 
     Ok(())
 }
 
-fn add(
-    mut args: Args,
-    topic: &Topic<TodoMsg>,
-    agent: &Agent<Todo>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+fn add(mut args: Args, agent: &mut Agent<Todo>) {
     if let Some(task) = args.next() {
-        let next_id = agent
-            .state()
-            .0
-            .last_key_value()
-            .map(|(id, _)| *id + 1)
-            .unwrap_or(1);
-
-        topic.publish((next_id, Some(task.clone())))?;
-        println!("Added {task} with id {next_id}")
+        agent.message(TodoInput::Add(task))
     } else {
         println!("No task was provided. sync_demo add [task]")
     }
-    Ok(())
 }
 
 fn load(topic: &Topic<TodoMsg>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
