@@ -1,20 +1,25 @@
 use std::{error::Error, fmt::Display};
 
-use tokio::sync::broadcast::{self, error::{RecvError, TryRecvError}};
+use tokio::sync::broadcast::{
+    self,
+    error::{RecvError, TryRecvError},
+};
 
-#[derive(Debug, Clone)]
-pub struct Sender<T:Clone> {
-    inner: broadcast::Sender<T>
+pub trait Sender {
+    type Item: Clone;
+
+    fn send(&self, value: Self::Item);
 }
 
-impl<T:Clone> Sender<T> {
-    pub fn send(&self, value: T) {
-        let _ = self.inner.send(value);
+impl<T: Clone> Sender for broadcast::Sender<T> {
+    type Item = T;
+    fn send(&self, value: T) {
+        let _ = self.send(value);
     }
 }
 
-pub struct Receiver<T: Clone>{
-    inner: broadcast::Receiver<T>,  
+pub struct Receiver<T: Clone> {
+    inner: broadcast::Receiver<T>,
 }
 
 impl<T: Clone> Receiver<T> {
@@ -22,7 +27,7 @@ impl<T: Clone> Receiver<T> {
         match self.inner.blocking_recv() {
             Ok(v) => Some(v),
             Err(RecvError::Closed) => None,
-            Err(RecvError::Lagged(_)) => self.recv()
+            Err(RecvError::Lagged(_)) => self.recv(),
         }
     }
 
@@ -31,7 +36,7 @@ impl<T: Clone> Receiver<T> {
             match self.inner.recv().await {
                 Ok(v) => break Some(v),
                 Err(RecvError::Closed) => break None,
-                Err(RecvError::Lagged(_)) => continue
+                Err(RecvError::Lagged(_)) => continue,
             }
         }
     }
@@ -41,7 +46,7 @@ impl<T: Clone> Receiver<T> {
             Ok(v) => Ok(v),
             Err(TryRecvError::Empty) => Err(TryError::Empty),
             Err(TryRecvError::Closed) => Err(TryError::Closed),
-            Err(TryRecvError::Lagged(_)) => self.try_recv()
+            Err(TryRecvError::Lagged(_)) => self.try_recv(),
         }
     }
 }
@@ -49,36 +54,45 @@ impl<T: Clone> Receiver<T> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TryError {
     Empty,
-    Closed
+    Closed,
 }
 
-impl Error for TryError {
-
-}
+impl Error for TryError {}
 
 impl Display for TryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Closed => write!(f, "This channel is closed from sender."),
-            Self::Empty => write!(f, "There is no data to return just now. (Would block.)")
+            Self::Empty => write!(f, "There is no data to return just now. (Would block.)"),
         }
     }
 }
 
-pub struct Channel<T: Clone>{
-    inner: broadcast::Sender<T>
+pub struct Channel<T: Clone> {
+    inner: broadcast::Sender<T>,
 }
 
 impl<T: Clone> Channel<T> {
     pub fn new(capacity: usize) -> Self {
-        Channel { inner: broadcast::Sender::new(capacity) }
+        Channel {
+            inner: broadcast::Sender::new(capacity),
+        }
     }
 
-    pub fn publish(&mut self) -> Sender<T> {
-        Sender { inner: self.inner.clone() }
+    pub fn publish(&mut self) -> impl Sender<Item = T> {
+        self.inner.clone()
     }
 
     pub fn subscribe(&self) -> Receiver<T> {
-        Receiver { inner: self.inner.subscribe() }
+        Receiver {
+            inner: self.inner.subscribe(),
+        }
+    }
+}
+
+impl<T: Clone> Sender for Channel<T> {
+    type Item = T;
+    fn send(&self, value: T) {
+        let _ = self.inner.send(value);
     }
 }
