@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display, future::Future};
+use std::{error::Error, fmt::Display, future::Future, marker::PhantomData};
 
 use tokio::sync::broadcast::{
     self,
@@ -9,6 +9,14 @@ pub trait Sender {
     type Item: Clone;
 
     fn send(&self, value: Self::Item);
+
+    fn filter_map<F, I: Clone>(self, f: F) -> FilterMapSender<I, Self, F>
+    where
+        Self: Sized,
+        F: Fn(I) -> Option<Self::Item>,
+    {
+        FilterMapSender::<I, Self, F> { inner: self, f, _marker: PhantomData }
+    }
 }
 
 impl<T: Clone> Sender for broadcast::Sender<T> {
@@ -97,5 +105,31 @@ impl<T: Clone + Send> Sender for Channel<T> {
     type Item = T;
     fn send(&self, value: T) {
         let _ = self.inner.send(value);
+    }
+}
+
+pub struct FilterMapSender<I, S, F>
+where
+    I: Clone,
+    S: Sender,
+    F: Fn(I) -> Option<S::Item>,
+{
+    inner: S,
+    f: F,
+    _marker: PhantomData<I>
+}
+
+impl<I, S, F> Sender for FilterMapSender<I, S, F>
+where
+    I: Clone,
+    S: Sender,
+    F: Fn(I) -> Option<S::Item>,
+{
+    type Item = I;
+
+    fn send(&self, value: Self::Item) {
+        if let Some(value) = (self.f)(value) {
+            self.inner.send(value)
+        }
     }
 }
