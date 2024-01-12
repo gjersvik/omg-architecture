@@ -2,8 +2,6 @@ use std::{collections::BTreeMap, env, error::Error, mem};
 
 use omg_core::{Agency, Agent, State, Topic};
 
-type TodoMsg = (u64, Option<String>);
-
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
     let storage = omg_sqlite::file("todo.db");
@@ -109,7 +107,9 @@ fn inputs() -> TodoInput {
     }
 }
 
-fn load(topic: &Topic<TodoMsg>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
+fn load(
+    topic: &Topic<(u64, Option<String>)>,
+) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
     topic
         .subscribe()
         .map(|msg| msg.map(|(key, value)| TodoInput::Load(key, value)))
