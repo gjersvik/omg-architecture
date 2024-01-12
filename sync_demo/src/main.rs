@@ -1,9 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    env::{self, Args},
-    error::Error,
-    mem,
-};
+use std::{collections::BTreeMap, env, error::Error, mem};
 
 use omg_core::{Agency, Agent, State, Topic};
 
@@ -24,14 +19,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     // Run the current command
-    let mut args = env::args();
-    args.next();
-    match args.next().as_deref() {
-        Some("list") => agent.message(TodoInput::List),
-        Some("add") => add(args, &mut agent),
-        Some("remove") => remove(args, &mut agent)?,
-        _ => agent.message(TodoInput::Help),
-    };
+    agent.message(inputs());
     mem::drop(agent);
 
     // Handle the results.
@@ -102,25 +90,22 @@ impl State for Todo {
                     TodoOutput::Publish(id, None),
                     TodoOutput::PrintLine(format!("Removed task with id {id}")),
                 ]
-            },
+            }
         }
     }
 }
 
-fn remove(mut args: Args, agent: &mut Agent<Todo>) -> Result<(), Box<dyn Error + Send + Sync>> {
-    if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
-        agent.message(TodoInput::Remove(id))
-    } else {
-        println!("No task was provided. sync_demo remove [task]")
-    }
-    Ok(())
-}
+fn inputs() -> TodoInput {
+    let args: Vec<_> = env::args().collect();
+    let args_str: Vec<_> = args.iter().map(|s| s as &str).collect();
 
-fn add(mut args: Args, agent: &mut Agent<Todo>) {
-    if let Some(task) = args.next() {
-        agent.message(TodoInput::Add(task))
-    } else {
-        println!("No task was provided. sync_demo add [task]")
+    match args_str[..] {
+        [_, "list"] => TodoInput::List,
+        [_, "add", task] => TodoInput::Add(task.to_owned()),
+        [_, "remove", id] if id.parse::<u64>().is_ok() => {
+            TodoInput::Remove(id.parse::<u64>().unwrap())
+        }
+        _ => TodoInput::Help,
     }
 }
 
