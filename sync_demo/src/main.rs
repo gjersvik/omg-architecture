@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     match args.next().as_deref() {
         Some("list") => agent.message(TodoInput::List),
         Some("add") => add(args, &mut agent),
-        Some("remove") => remove(args, &topic)?,
+        Some("remove") => remove(args, &mut agent)?,
         _ => agent.message(TodoInput::Help),
     };
     mem::drop(agent);
@@ -48,6 +48,7 @@ enum TodoInput {
     Help,
     List,
     Add(String),
+    Remove(u64),
     Load(u64, Option<String>),
 }
 
@@ -96,15 +97,19 @@ impl State for Todo {
                     TodoOutput::PrintLine(format!("Added {task} with id {next_id}")),
                 ]
             }
+            TodoInput::Remove(id) => {
+                vec![
+                    TodoOutput::Publish(id, None),
+                    TodoOutput::PrintLine(format!("Removed task with id {id}")),
+                ]
+            },
         }
     }
 }
 
-fn remove(mut args: Args, topic: &Topic<TodoMsg>) -> Result<(), Box<dyn Error + Send + Sync>> {
+fn remove(mut args: Args, agent: &mut Agent<Todo>) -> Result<(), Box<dyn Error + Send + Sync>> {
     if let Some(id) = args.next().and_then(|s| s.parse::<u64>().ok()) {
-        // There we use the blocking version of the remove api. The change will be persisted before return.
-        topic.publish((id, None))?;
-        println!("Removed task with id {id}")
+        agent.message(TodoInput::Remove(id))
     } else {
         println!("No task was provided. sync_demo remove [task]")
     }
