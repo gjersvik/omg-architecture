@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, future::Future};
 
 use tokio::sync::broadcast::{
     self,
@@ -18,22 +18,27 @@ impl<T: Clone> Sender for broadcast::Sender<T> {
     }
 }
 
-pub struct Receiver<T: Clone> {
-    inner: broadcast::Receiver<T>,
+pub trait Receiver {
+    type Item: Clone;
+    fn recv(&mut self) -> Option<Self::Item>;
+    fn async_recv(&mut self) -> impl Future<Output = Option<Self::Item>> + Send;
+    fn try_recv(&mut self) -> Result<Self::Item, TryError>;
 }
 
-impl<T: Clone> Receiver<T> {
-    pub fn recv(&mut self) -> Option<T> {
-        match self.inner.blocking_recv() {
+impl<T: Clone + Send> Receiver for broadcast::Receiver<T> {
+    type Item = T;
+
+    fn recv(&mut self) -> Option<T> {
+        match self.blocking_recv() {
             Ok(v) => Some(v),
             Err(RecvError::Closed) => None,
-            Err(RecvError::Lagged(_)) => self.recv(),
+            Err(RecvError::Lagged(_)) => Receiver::recv(self),
         }
     }
 
-    pub async fn async_recv(&mut self) -> Option<T> {
+    async fn async_recv(&mut self) -> Option<T> {
         loop {
-            match self.inner.recv().await {
+            match self.recv().await {
                 Ok(v) => break Some(v),
                 Err(RecvError::Closed) => break None,
                 Err(RecvError::Lagged(_)) => continue,
@@ -41,12 +46,12 @@ impl<T: Clone> Receiver<T> {
         }
     }
 
-    pub fn try_recv(&mut self) -> Result<T, TryError> {
-        match self.inner.try_recv() {
+    fn try_recv(&mut self) -> Result<T, TryError> {
+        match self.try_recv() {
             Ok(v) => Ok(v),
             Err(TryRecvError::Empty) => Err(TryError::Empty),
             Err(TryRecvError::Closed) => Err(TryError::Closed),
-            Err(TryRecvError::Lagged(_)) => self.try_recv(),
+            Err(TryRecvError::Lagged(_)) => Receiver::try_recv(self),
         }
     }
 }
@@ -68,11 +73,11 @@ impl Display for TryError {
     }
 }
 
-pub struct Channel<T: Clone> {
+pub struct Channel<T: Clone + Send> {
     inner: broadcast::Sender<T>,
 }
 
-impl<T: Clone> Channel<T> {
+impl<T: Clone + Send> Channel<T> {
     pub fn new(capacity: usize) -> Self {
         Channel {
             inner: broadcast::Sender::new(capacity),
@@ -83,14 +88,12 @@ impl<T: Clone> Channel<T> {
         self.inner.clone()
     }
 
-    pub fn subscribe(&self) -> Receiver<T> {
-        Receiver {
-            inner: self.inner.subscribe(),
-        }
+    pub fn subscribe(&self) -> impl Receiver<Item = T> {
+        self.inner.subscribe()
     }
 }
 
-impl<T: Clone> Sender for Channel<T> {
+impl<T: Clone + Send> Sender for Channel<T> {
     type Item = T;
     fn send(&self, value: T) {
         let _ = self.inner.send(value);

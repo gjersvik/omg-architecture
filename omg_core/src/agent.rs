@@ -2,7 +2,7 @@ use crate::{Channel, Receiver, Sender};
 
 pub trait State {
     type Input;
-    type Output: Clone;
+    type Output: Clone + Send;
 
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output>;
 }
@@ -31,7 +31,7 @@ impl<S: State> Agent<S> {
         }
     }
 
-    pub fn subscribe(&self) -> Receiver<S::Output> {
+    pub fn subscribe(&self) -> impl Receiver<Item = S::Output> {
         self.channel.subscribe()
     }
 }

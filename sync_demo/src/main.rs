@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, env, error::Error, mem};
 
-use omg_core::{Agency, Agent, State, Topic};
+use omg_core::{Agency, Agent, Receiver, State, Topic};
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
