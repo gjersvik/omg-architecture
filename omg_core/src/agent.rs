@@ -1,4 +1,4 @@
-use crate::{Receiver, Sender};
+use crate::{Receiver, Channel};
 
 pub trait State {
     type Input;
@@ -9,14 +9,14 @@ pub trait State {
 
 pub struct Agent<S: State> {
     state: S,
-    sender: Sender<S::Output>,
+    sender: Channel<S::Output>,
 }
 
 impl<S: State> Agent<S> {
     pub fn new(state: S) -> Self {
         Agent {
             state,
-            sender: Sender::new(64),
+            sender: Channel::new(64),
         }
     }
 
@@ -27,7 +27,7 @@ impl<S: State> Agent<S> {
     pub fn message(&mut self, msg: S::Input) {
         let output = self.state.handle(msg);
         for event in output {
-            self.sender.send(event);
+            self.sender.publish().send(event);
         }
     }
 

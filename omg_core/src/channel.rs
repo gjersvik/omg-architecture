@@ -8,16 +8,8 @@ pub struct Sender<T:Clone> {
 }
 
 impl<T:Clone> Sender<T> {
-    pub fn new(capacity: usize) -> Self {
-        Sender { inner: broadcast::Sender::new(capacity) }
-    }
-
     pub fn send(&self, value: T) {
         let _ = self.inner.send(value);
-    }
-
-    pub fn subscribe(&self) -> Receiver<T>  {
-        Receiver { inner: self.inner.subscribe() }
     }
 }
 
@@ -70,5 +62,23 @@ impl Display for TryError {
             Self::Closed => write!(f, "This channel is closed from sender."),
             Self::Empty => write!(f, "There is no data to return just now. (Would block.)")
         }
+    }
+}
+
+pub struct Channel<T: Clone>{
+    inner: broadcast::Sender<T>
+}
+
+impl<T: Clone> Channel<T> {
+    pub fn new(capacity: usize) -> Self {
+        Channel { inner: broadcast::Sender::new(capacity) }
+    }
+
+    pub fn publish(&mut self) -> Sender<T> {
+        Sender { inner: self.inner.clone() }
+    }
+
+    pub fn subscribe(&self) -> Receiver<T> {
+        Receiver { inner: self.inner.subscribe() }
     }
 }
