@@ -22,11 +22,11 @@ Right now i have 3 tings i want to abstract over:
 3. Runtime agnostics business logic. Using my own take on the actor pattern.
 
 ## Architecture
-The man tool for runtime agnostic code is channels and treads. Channels allows me to send messages between different contexts. And treads allows me to escape the current context. (Except in web browsers.)
+The main tool for runtime agnostic code is channels and treads. Channels allows me to send messages between different contexts. And treads allows me to escape the current context. (Except in web browsers.)
 
 On the top is Agents. Agents process messages and have a typed Input and Output message type. So for every message it can modify its own state or generate 0 or more output messages. But Agents do not part of a runtime so some external code need to tell the agent when to process messages. Also however drives the agent can get an immutable reference to its internal state.
 
-Agents can listen to channels and you give it at mapping function on subscribe. Can also publish output messages to one or more channels using a mapping function. 
+Agents can listen to channels and publish output to channel. And channels allows you to use mapping function on subscribe and publish. 
 
 Agents can be put into an Agency. Allows multiple agents to be run in framework native way or background treads. It is not possible to get handle to internal state of any agents that exists in the runtime. There is no way to know when an agent in an agency changes it state. But it is possible to remove and inject and agent from an agency.
 
