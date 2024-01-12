@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, env, error::Error, mem};
 
-use omg_core::{Agency, Agent, Receiver, State, Topic};
+use omg_core::{Agency, Agent, Channel, Receiver, Sender, State, Topic};
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
@@ -11,7 +11,23 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let events = load(&topic)?;
 
     let mut agent = Agent::new(Todo(BTreeMap::new()));
-    let mut outputs = agent.subscribe();
+    agent.on_output(Box::new(topic.filter_map(|event| {
+        if let TodoOutput::Publish(key, value) = event {
+            Some((key, value))
+        } else {
+            None
+        }
+    })));
+    let mut printer = Channel::new(128);
+    agent.on_output(Box::new(printer.publish().filter_map(|todo| {
+        if let TodoOutput::PrintLine(s) = todo {
+            Some(s)
+        } else {
+            None
+        }
+    })));
+    let mut printer_read = printer.subscribe();
+    mem::drop(printer);
     for event in events {
         agent.message(event);
     }
@@ -21,11 +37,8 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     mem::drop(agent);
 
     // Handle the results.
-    while let Some(msg) = outputs.recv() {
-        match msg {
-            TodoOutput::PrintLine(s) => println!("{s}"),
-            TodoOutput::Publish(key, value) => topic.publish((key, value))?,
-        }
+    while let Some(msg) = printer_read.recv() {
+        println!("{msg}");
     }
     Ok(())
 }

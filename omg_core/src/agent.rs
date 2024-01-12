@@ -1,4 +1,4 @@
-use crate::{Channel, Receiver, Sender};
+use crate::Sender;
 
 pub trait State {
     type Input;
@@ -9,14 +9,14 @@ pub trait State {
 
 pub struct Agent<S: State> {
     state: S,
-    channel: Channel<S::Output>,
+    senders: Vec<Box<dyn Sender<Item = S::Output>>>,
 }
 
 impl<S: State> Agent<S> {
     pub fn new(state: S) -> Self {
         Agent {
             state,
-            channel: Channel::new(64),
+            senders: Vec::new(),
         }
     }
 
@@ -27,11 +27,13 @@ impl<S: State> Agent<S> {
     pub fn message(&mut self, msg: S::Input) {
         let output = self.state.handle(msg);
         for event in output {
-            self.channel.send(event);
+            for sender in self.senders.iter() {
+                sender.send(event.clone());
+            }
         }
     }
 
-    pub fn subscribe(&self) -> impl Receiver<Item = S::Output> {
-        self.channel.subscribe()
+    pub fn on_output(&mut self, sender: Box<dyn Sender<Item = S::Output>>) {
+        self.senders.push(sender)
     }
 }
