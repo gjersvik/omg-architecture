@@ -1,5 +1,3 @@
-use crate::Sender;
-
 pub trait State {
     type Input;
     type Output: Clone + Send;
@@ -19,14 +17,14 @@ pub trait ActorTypes {
 
 pub struct Agent<S: ActorTypes> {
     state: S,
-    senders: Vec<Box<dyn Sender<Item = S::Output>>>,
+    callbacks: Vec<Box<dyn Fn(S::Output) -> ()>>,
 }
 
 impl<S: State> Agent<S> {
     pub fn new(state: S) -> Self {
         Agent {
             state,
-            senders: Vec::new(),
+            callbacks: Vec::new(),
         }
     }
 
@@ -37,13 +35,13 @@ impl<S: State> Agent<S> {
     pub fn message(&mut self, msg: S::Input) {
         let output = self.state.handle(msg);
         for event in output {
-            for sender in self.senders.iter() {
-                sender.send(event.clone());
+            for callback in self.callbacks.iter() {
+                callback(event.clone());
             }
         }
     }
 
-    pub fn on_output(&mut self, sender: Box<dyn Sender<Item = S::Output>>) {
-        self.senders.push(sender)
+    pub fn add_callback(&mut self, callback: Box<dyn Fn(S::Output) -> ()>) {
+        self.callbacks.push(callback)
     }
 }
