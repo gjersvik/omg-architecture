@@ -7,7 +7,17 @@ pub trait State {
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output>;
 }
 
-pub struct Agent<S: State> {
+impl<T: State> ActorTypes for T {
+    type Input = T::Input;
+    type Output = T::Output;
+}
+
+pub trait ActorTypes {
+    type Input;
+    type Output: Clone + Send;
+}
+
+pub struct Agent<S: ActorTypes> {
     state: S,
     senders: Vec<Box<dyn Sender<Item = S::Output>>>,
 }
