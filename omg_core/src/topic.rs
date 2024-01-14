@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::{oneshot, watch};
 
-use crate::{Receiver, Sender, StorageEvent, StorageItem, StoragePort, StorageTopic};
+use crate::{StorageEvent, StorageItem, StoragePort, StorageTopic};
 
 pub trait Message: Serialize + for<'a> Deserialize<'a> {}
 
@@ -34,14 +34,6 @@ impl<M: Message> Topic<M> {
 
     pub fn subscribe(&self) -> impl Iterator<Item = Result<M, Box<dyn Error + Send + Sync>>> {
         Subscribe::new(self.core.clone())
-    }
-}
-
-impl<M: Message + Clone> Sender for Topic<M> {
-    type Item = M;
-
-    fn send(&self, value: Self::Item) {
-        self.publish(value).unwrap()
     }
 }
 
@@ -71,22 +63,6 @@ impl<M: Message> Iterator for Subscribe<M> {
             self.current += 1;
         }
         value.map(|v| Ok(serde_json::from_str::<M>(&v)?))
-    }
-}
-
-impl<M: Message + Clone + Send> Receiver for Subscribe<M> {
-    type Item = M;
-
-    fn recv(&mut self) -> Option<Self::Item> {
-        self.next().map(|r| r.unwrap())
-    }
-
-    async fn async_recv(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-
-    fn try_recv(&mut self) -> Result<Self::Item, crate::TryError> {
-        todo!()
     }
 }
 

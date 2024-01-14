@@ -1,12 +1,10 @@
 mod agent;
-mod channel;
 mod storage;
 mod topic;
 
 use std::{collections::BTreeMap, error::Error, sync::Arc};
 
 pub use agent::*;
-pub use channel::*;
 pub use storage::*;
 use tokio::sync::oneshot;
 pub use topic::*;
