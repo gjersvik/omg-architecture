@@ -1,9 +1,9 @@
 use std::error::Error;
 
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 use thiserror::Error;
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
 pub struct StorageItem {
@@ -31,7 +31,7 @@ pub enum StorageEvent {
     ),
 }
 
-pub type StoragePort = UnboundedSender<StorageEvent>;
+pub type StoragePort = Sender<StorageEvent>;
 
 #[derive(Error, Debug, Clone)]
 #[error(transparent)]

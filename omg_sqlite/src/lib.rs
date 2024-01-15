@@ -1,23 +1,22 @@
-use std::{error::Error, path::PathBuf, sync::Arc, thread};
+use std::{error::Error, path::PathBuf, sync::{Arc, mpsc::{self, Receiver}}, thread};
 
 use omg_core::{StorageError, StorageEvent, StorageItem, StoragePort, StorageTopic};
 use sqlite::{Connection, State};
-use tokio::sync::mpsc;
 
 pub fn file(path: impl Into<PathBuf>) -> StoragePort {
-    let (send, recv) = mpsc::unbounded_channel();
+    let (send, recv) = mpsc::channel();
     let path = path.into();
     thread::spawn(move || backed(recv, path));
 
     send
 }
 
-fn backed(mut events: mpsc::UnboundedReceiver<StorageEvent>, path: PathBuf) {
+fn backed(events: Receiver<StorageEvent>, path: PathBuf) {
     let db = Connection::open(path).unwrap();
     db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")
         .unwrap();
 
-    while let Some(event) = events.blocking_recv() {
+    while let Ok(event) = events.recv() {
         match event {
             StorageEvent::Topics(reply) => {
                 let _ = reply.send(topics(&db).into_storage_error());
