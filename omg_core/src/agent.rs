@@ -7,20 +7,10 @@ pub trait State {
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output>;
 }
 
-impl<T: State> ActorTypes for T {
-    type Input = T::Input;
-    type Output = T::Output;
-}
-
-pub trait ActorTypes {
-    type Input;
-    type Output: Clone + Send;
-}
-
-pub struct Agent<S: ActorTypes> {
+pub struct Agent<S: State> {
     state: S,
     channel: Receiver<S::Input>,
-    callbacks: Vec<Box<dyn Fn(S::Output) -> () + Send>>,
+    callbacks: Vec<Box<dyn Fn(S::Output) + Send>>,
 }
 
 impl<S: State> Agent<S> {
@@ -56,7 +46,7 @@ impl<S: State> Agent<S> {
         }
     }
 
-    pub fn add_callback(&mut self, callback: Box<dyn Fn(S::Output) -> () + Send>) {
+    pub fn add_callback(&mut self, callback: Box<dyn Fn(S::Output) + Send>) {
         self.callbacks.push(callback)
     }
 }
