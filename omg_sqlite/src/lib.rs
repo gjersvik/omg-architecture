@@ -5,11 +5,11 @@ use std::{
     thread,
 };
 
-use omg_core::{Service, StorageError, StorageEvent, StorageItem, StorageTopic};
+use omg_core::{Agent, Handle, Service, StorageError, StorageEvent, StorageItem, StorageTopic};
 use sqlite::{Connection, State};
 
-pub fn file(path: impl Into<PathBuf>) -> impl Service<Input = StorageEvent, Output = ()> {
-    Sqlite { path: path.into() }
+pub fn file(path: impl Into<PathBuf>) -> (Handle<StorageEvent>, impl Agent<Output = ()>) {
+    Sqlite { path: path.into() }.agent()
 }
 
 struct Sqlite {

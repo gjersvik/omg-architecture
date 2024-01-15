@@ -1,10 +1,11 @@
 use std::error::Error;
 
 use std::sync::Arc;
-use std::sync::mpsc::Sender;
 
 use thiserror::Error;
 use tokio::sync::oneshot;
+
+use crate::Handle;
 
 pub struct StorageItem {
     pub seq: u64,
@@ -31,7 +32,7 @@ pub enum StorageEvent {
     ),
 }
 
-pub type StoragePort = Sender<StorageEvent>;
+pub type StoragePort = Handle<StorageEvent>;
 
 #[derive(Error, Debug, Clone)]
 #[error(transparent)]

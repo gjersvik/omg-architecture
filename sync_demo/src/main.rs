@@ -1,16 +1,12 @@
-use std::{collections::BTreeMap, env, error::Error, sync::mpsc, thread};
+use std::{collections::BTreeMap, env, error::Error, thread};
 
-use omg_core::{Agency, Service, State, Topic};
+use omg_core::{Agency, State, Topic};
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
-    let mut storage = omg_sqlite::file("todo.db");
+    let (storage, _) = omg_sqlite::file("todo.db");
 
-    let (sender, receiver) = mpsc::channel();
-
-    storage.create(receiver, Box::new(|_| {}));
-
-    let mut agency = Agency::load(sender)?;
+    let mut agency = Agency::load(storage)?;
     let topic = agency.create_topic("todo");
     let events = load(&topic)?;
 

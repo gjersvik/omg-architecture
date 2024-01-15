@@ -1,5 +1,9 @@
-use std::sync::mpsc::{self, Receiver, SendError, Sender};
+use std::sync::{
+    mpsc::{self, Receiver, SendError, Sender},
+    Arc, Mutex,
+};
 
+#[derive(Debug)]
 pub struct Handle<T> {
     channel: Sender<T>,
 }
@@ -10,7 +14,24 @@ impl<T> Handle<T> {
     }
 }
 
-pub trait State where Self: Sized {
+impl<T> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        Self {
+            channel: self.channel.clone(),
+        }
+    }
+}
+
+pub trait Agent {
+    type Output: Clone + Send + 'static;
+
+    fn add_callback(&mut self, callback: Box<dyn Fn(Self::Output) + Send>);
+}
+
+pub trait State
+where
+    Self: Sized,
+{
     type Input;
     type Output: Clone + Send;
 
@@ -61,9 +82,53 @@ impl<S: State> StateAgent<S> {
     }
 }
 
-pub trait Service {
-    type Input;
-    type Output: Clone + Send;
+type ServiceCallback<T> = Arc<Mutex<Vec<Box<dyn Fn(T) + Send>>>>;
 
-    fn create(&mut self, channel: Receiver<Self::Input>, callback: Box<dyn Fn(Self::Output) + Send> );
+pub trait Service
+where
+    Self: Sized,
+{
+    type Input;
+    type Output: Clone + Send + 'static;
+
+    fn create(
+        &mut self,
+        channel: Receiver<Self::Input>,
+        callback: Box<dyn Fn(Self::Output) + Send>,
+    );
+
+    fn agent(mut self) -> (Handle<Self::Input>, ServiceAgent<Self>) {
+        let (sender, receiver) = mpsc::channel();
+        let handle = Handle { channel: sender };
+
+        let callbacks: ServiceCallback<Self::Output> = Arc::default();
+        let callbacks_clone = callbacks.clone();
+        let callback = move |msg: Self::Output| {
+            for callback in callbacks_clone.lock().unwrap().iter() {
+                callback(msg.clone());
+            }
+        };
+
+        self.create(receiver, Box::new(callback));
+
+        let agent = ServiceAgent {
+            _state: self,
+            _callbacks: callbacks,
+        };
+
+        (handle, agent)
+    }
+}
+
+pub struct ServiceAgent<S: Service> {
+    _state: S,
+    _callbacks: ServiceCallback<S::Output>,
+}
+
+impl<S: Service> Agent for ServiceAgent<S> {
+    type Output = S::Output;
+
+    fn add_callback(&mut self, _callback: Box<dyn Fn(S::Output) + Send>) {
+        todo!()
+    }
 }
