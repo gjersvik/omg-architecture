@@ -60,3 +60,10 @@ impl<S: State> StateAgent<S> {
         self.callbacks.push(callback)
     }
 }
+
+pub trait Service {
+    type Input;
+    type Output: Clone + Send;
+
+    fn create(&mut self, channel: Receiver<Self::Input>, callback: Box<dyn Fn(Self::Output) + Send> );
+}
