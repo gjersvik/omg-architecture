@@ -1,14 +1,29 @@
-use std::{error::Error, path::PathBuf, sync::{Arc, mpsc::{self, Receiver}}, thread};
+use std::{
+    error::Error,
+    path::PathBuf,
+    sync::{mpsc::Receiver, Arc},
+    thread,
+};
 
-use omg_core::{StorageError, StorageEvent, StorageItem, StoragePort, StorageTopic};
+use omg_core::{Service, StorageError, StorageEvent, StorageItem, StorageTopic};
 use sqlite::{Connection, State};
 
-pub fn file(path: impl Into<PathBuf>) -> StoragePort {
-    let (send, recv) = mpsc::channel();
-    let path = path.into();
-    thread::spawn(move || backed(recv, path));
+pub fn file(path: impl Into<PathBuf>) -> impl Service<Input = StorageEvent, Output = ()> {
+    Sqlite { path: path.into() }
+}
 
-    send
+struct Sqlite {
+    path: PathBuf,
+}
+
+impl Service for Sqlite {
+    type Input = StorageEvent;
+    type Output = ();
+
+    fn create(&mut self, channel: Receiver<Self::Input>, _: Box<dyn Fn(Self::Output) + Send>) {
+        let path = self.path.clone();
+        thread::spawn(move || backed(channel, path));
+    }
 }
 
 fn backed(events: Receiver<StorageEvent>, path: PathBuf) {
