@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, env, error::Error};
+use std::{collections::BTreeMap, env, error::Error, thread};
 
 use omg_core::{Agency, Agent, State, Topic};
 
@@ -10,17 +10,23 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let topic = agency.create_topic("todo");
     let events = load(&topic)?;
 
-    let mut agent = Agent::new(Todo(BTreeMap::new()));
+    // setup the agent
+    let (handle, mut agent) = Agent::new(Todo(BTreeMap::new()));
     agent.add_callback(Box::new(move |event| match event {
         TodoOutput::PrintLine(msg) => println!("{msg}"),
         TodoOutput::Publish(key, value) => topic.publish((key, value)).unwrap(),
     }));
+    let join = thread::spawn(move || agent.block_until_done());
+
+    //Publish messages
     for event in events {
-        agent.message(event);
+        handle.send(event)?;
     }
 
-    // Run the current command
-    agent.message(inputs());
+    handle.send(inputs())?;
+
+    // Wait for runner thread.
+    let _ = join.join();
     Ok(())
 }
 
