@@ -1,32 +1,42 @@
 use std::sync::mpsc::{self, Receiver, SendError, Sender};
 
-pub trait State {
+pub struct Handle<T> {
+    channel: Sender<T>,
+}
+
+impl<T> Handle<T> {
+    pub fn send(&self, message: T) -> Result<(), SendError<T>> {
+        self.channel.send(message)
+    }
+}
+
+pub trait State where Self: Sized {
     type Input;
     type Output: Clone + Send;
 
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output>;
-}
 
-pub struct Agent<S: State> {
-    state: S,
-    channel: Receiver<S::Input>,
-    callbacks: Vec<Box<dyn Fn(S::Output) + Send>>,
-}
-
-impl<S: State> Agent<S> {
-    pub fn new(state: S) -> (Handle<S::Input>, Self) {
+    fn agent(self) -> (Handle<Self::Input>, StateAgent<Self>) {
         let (sender, receiver) = mpsc::channel();
         let handle = Handle { channel: sender };
 
-        let agent = Agent {
-            state,
+        let agent: StateAgent<Self> = StateAgent {
+            state: self,
             channel: receiver,
             callbacks: Vec::new(),
         };
 
         (handle, agent)
     }
+}
 
+pub struct StateAgent<S: State> {
+    state: S,
+    channel: Receiver<S::Input>,
+    callbacks: Vec<Box<dyn Fn(S::Output) + Send>>,
+}
+
+impl<S: State> StateAgent<S> {
     pub fn state(&self) -> &S {
         &self.state
     }
@@ -48,16 +58,5 @@ impl<S: State> Agent<S> {
 
     pub fn add_callback(&mut self, callback: Box<dyn Fn(S::Output) + Send>) {
         self.callbacks.push(callback)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Handle<T> {
-    channel: Sender<T>,
-}
-
-impl<T> Handle<T> {
-    pub fn send(&self, message: T) -> Result<(), SendError<T>> {
-        self.channel.send(message)
     }
 }

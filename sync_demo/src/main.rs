@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, env, error::Error, thread};
 
-use omg_core::{Agency, Agent, State, Topic};
+use omg_core::{Agency, State, Topic};
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let events = load(&topic)?;
 
     // setup the agent
-    let (handle, mut agent) = Agent::new(Todo(BTreeMap::new()));
+    let (handle, mut agent) = Todo(BTreeMap::new()).agent();
     agent.add_callback(Box::new(move |event| match event {
         TodoOutput::PrintLine(msg) => println!("{msg}"),
         TodoOutput::Publish(key, value) => topic.publish((key, value)).unwrap(),
