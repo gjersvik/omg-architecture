@@ -41,3 +41,19 @@ Services exist to connect to external code. They are represented as two channels
 1. Sync demo using a sync only core with sqlite backend.
 1. Async demo with async supported framework and backend.
 1. Non-blocking demo with non-blocking supported framework and backend.
+
+## Design scratch space
+
+### Generic Runnable Actor state.
+```mermaid
+stateDiagram-v2
+    [*] --> NoInputs: Agent starts empty.
+    NoInputs --> [*]: Input closed
+    ProcessInputs --> SendOutput: Inner state machine is called.
+    ProcessInputs --> NoInputs: There was no messages.
+    NoInputs --> ProcessInputs: Message received.
+    SendOutput --> SendOutput: More outputs to process.
+    SendOutput --> OutputBlocked: One output is full.
+    OutputBlocked --> SendOutput: That output is have space.
+    SendOutput --> ProcessInputs: Ready for next message.
+```
