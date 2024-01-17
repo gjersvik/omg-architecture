@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, env, error::Error, mem, thread};
 
-use omg_core::{Handle, State, StorageEvent, Topic, TopicCore};
+use omg_core::{Handle, State, StorageEvent};
 use tokio::sync::oneshot;
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -126,13 +126,20 @@ fn publish(storage: &Handle<StorageEvent>, data: (u64, Option<String>)) {
     let todo = topics
         .into_iter()
         .find(|topic| topic.name.as_ref() == "todo");
-    let core = if let Some(topic) = todo {
-        TopicCore::new(topic, storage.clone())
+    let next_id = if let Some(topic) = todo {
+        topic.last + 1
     } else {
-        TopicCore::empty("todo".into(), storage.clone())
+        1
     };
 
-    let topic = Topic::new(core);
-
-    topic.publish(data).unwrap()
+    let (send, recv) = oneshot::channel();
+    storage
+        .send(StorageEvent::Push(
+            "todo".into(),
+            next_id,
+            serde_json::to_string(&data).unwrap().into(),
+            send,
+        ))
+        .unwrap();
+    recv.blocking_recv().unwrap().unwrap();
 }
