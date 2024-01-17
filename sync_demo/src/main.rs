@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, env, error::Error, mem, thread};
 
-use omg_core::{Handle, State, StorageEvent};
+use omg_core::{Handle, State, StorageInput};
 use tokio::sync::oneshot;
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -106,9 +106,9 @@ fn inputs() -> TodoInput {
     }
 }
 
-fn load(storage: &Handle<StorageEvent>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
+fn load(storage: &Handle<StorageInput>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
     let (send, recv) = oneshot::channel();
-    storage.send(StorageEvent::ReadAll("todo".into(), send))?;
+    storage.send(StorageInput::ReadAll("todo".into(), send))?;
     let data = recv.blocking_recv()??;
     data.into_iter()
         .map(|item| {
@@ -118,9 +118,9 @@ fn load(storage: &Handle<StorageEvent>) -> Result<Vec<TodoInput>, Box<dyn Error 
         .collect()
 }
 
-fn publish(storage: &Handle<StorageEvent>, data: (u64, Option<String>)) {
+fn publish(storage: &Handle<StorageInput>, data: (u64, Option<String>)) {
     let (send, recv) = oneshot::channel();
-    storage.send(StorageEvent::Topics(send)).unwrap();
+    storage.send(StorageInput::Topics(send)).unwrap();
     let topics = recv.blocking_recv().unwrap().unwrap();
 
     let todo = topics
@@ -134,7 +134,7 @@ fn publish(storage: &Handle<StorageEvent>, data: (u64, Option<String>)) {
 
     let (send, recv) = oneshot::channel();
     storage
-        .send(StorageEvent::Push(
+        .send(StorageInput::Push(
             "todo".into(),
             next_id,
             serde_json::to_string(&data).unwrap().into(),

@@ -5,8 +5,6 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
-use crate::Handle;
-
 pub struct StorageItem {
     pub seq: u64,
     pub data: Arc<str>,
@@ -18,7 +16,7 @@ pub struct StorageTopic {
     pub last: u64,
 }
 
-pub enum StorageEvent {
+pub enum StorageInput {
     Topics(oneshot::Sender<Result<Vec<StorageTopic>, StorageError>>),
     Push(
         Arc<str>,
@@ -31,8 +29,6 @@ pub enum StorageEvent {
         oneshot::Sender<Result<Vec<StorageItem>, StorageError>>,
     ),
 }
-
-pub type StoragePort = Handle<StorageEvent>;
 
 #[derive(Error, Debug, Clone)]
 #[error(transparent)]

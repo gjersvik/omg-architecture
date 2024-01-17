@@ -5,10 +5,10 @@ use std::{
     thread,
 };
 
-use omg_core::{Agent, Handle, Service, StorageError, StorageEvent, StorageItem, StorageTopic};
+use omg_core::{Agent, Handle, Service, StorageError, StorageInput, StorageItem, StorageTopic};
 use sqlite::{Connection, State};
 
-pub fn file(path: impl Into<PathBuf>) -> (Handle<StorageEvent>, impl Agent<Output = ()>) {
+pub fn file(path: impl Into<PathBuf>) -> (Handle<StorageInput>, impl Agent<Output = ()>) {
     Sqlite { path: path.into() }.agent()
 }
 
@@ -17,7 +17,7 @@ struct Sqlite {
 }
 
 impl Service for Sqlite {
-    type Input = StorageEvent;
+    type Input = StorageInput;
     type Output = ();
 
     fn create(&mut self, channel: Receiver<Self::Input>, _: Box<dyn Fn(Self::Output) + Send>) {
@@ -26,20 +26,20 @@ impl Service for Sqlite {
     }
 }
 
-fn backed(events: Receiver<StorageEvent>, path: PathBuf) {
+fn backed(events: Receiver<StorageInput>, path: PathBuf) {
     let db = Connection::open(path).unwrap();
     db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")
         .unwrap();
 
     while let Ok(event) = events.recv() {
         match event {
-            StorageEvent::Topics(reply) => {
+            StorageInput::Topics(reply) => {
                 let _ = reply.send(topics(&db).into_storage_error());
             }
-            StorageEvent::Push(topic, seq, data, reply) => {
+            StorageInput::Push(topic, seq, data, reply) => {
                 let _ = reply.send(push(&db, &topic, seq, &data).into_storage_error());
             }
-            StorageEvent::ReadAll(topic, reply) => {
+            StorageInput::ReadAll(topic, reply) => {
                 let _ = reply.send(read_all(&db, &topic).into_storage_error());
             }
         }
