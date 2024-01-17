@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, env, error::Error, thread};
+use std::{collections::BTreeMap, env, error::Error, mem, thread};
 
 use omg_core::{Handle, State, StorageEvent, Topic, TopicCore};
 use tokio::sync::oneshot;
@@ -22,6 +22,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     handle.send(inputs())?;
+    mem::drop(handle);
 
     // Wait for runner thread.
     let _ = join.join();
@@ -105,32 +106,16 @@ fn inputs() -> TodoInput {
     }
 }
 
-fn load(
-    storage: &Handle<StorageEvent>,
-) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
+fn load(storage: &Handle<StorageEvent>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
     let (send, recv) = oneshot::channel();
-    storage.send(StorageEvent::Topics(send))?;
-    let topics = recv.blocking_recv()??;
-
-    let todo = topics
-        .into_iter()
-        .find(|topic| topic.name.as_ref() == "todo");
-    let core = if let Some(topic) = todo {
-        let (send, recv) = oneshot::channel();
-        storage.send(StorageEvent::ReadAll(topic.name.clone(), send))?;
-        let data = recv.blocking_recv()??;
-        TopicCore::new(topic, data, storage.clone())
-    } else {
-        TopicCore::empty("todo".into(), storage.clone())
-    };
-
-    let topic = Topic::new(core);
-
-    let events = topic
-        .subscribe()
-        .map(|msg| msg.map(|(key, value)| TodoInput::Load(key, value)))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(events)
+    storage.send(StorageEvent::ReadAll("todo".into(), send))?;
+    let data = recv.blocking_recv()??;
+    data.into_iter()
+        .map(|item| {
+            let (key, value) = serde_json::from_str(&item.data)?;
+            Ok(TodoInput::Load(key, value))
+        })
+        .collect()
 }
 
 fn publish(storage: &Handle<StorageEvent>, data: (u64, Option<String>)) {
@@ -142,10 +127,7 @@ fn publish(storage: &Handle<StorageEvent>, data: (u64, Option<String>)) {
         .into_iter()
         .find(|topic| topic.name.as_ref() == "todo");
     let core = if let Some(topic) = todo {
-        let (send, recv) = oneshot::channel();
-        storage.send(StorageEvent::ReadAll(topic.name.clone(), send)).unwrap();
-        let data = recv.blocking_recv().unwrap().unwrap();
-        TopicCore::new(topic, data, storage.clone())
+        TopicCore::new(topic, storage.clone())
     } else {
         TopicCore::empty("todo".into(), storage.clone())
     };

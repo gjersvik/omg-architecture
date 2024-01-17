@@ -1,5 +1,4 @@
 use std::{
-    collections::BTreeMap,
     error::Error,
     marker::PhantomData,
     sync::{Arc, Mutex},
@@ -8,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::{oneshot, watch};
 
-use crate::{StorageEvent, StorageItem, StoragePort, StorageTopic};
+use crate::{StorageEvent, StoragePort, StorageTopic};
 
 pub trait Message: Serialize + for<'a> Deserialize<'a> {}
 
@@ -31,62 +30,21 @@ impl<M: Message> Topic<M> {
         self.core.publish(serde_json::to_string(&data)?)?;
         Ok(())
     }
-
-    pub fn subscribe(&self) -> impl Iterator<Item = Result<M, Box<dyn Error + Send + Sync>>> {
-        Subscribe::new(self.core.clone())
-    }
-}
-
-pub struct Subscribe<M: Message> {
-    core: Arc<TopicCore>,
-    current: u64,
-    _marker: PhantomData<M>,
-}
-
-impl<M: Message> Subscribe<M> {
-    fn new(core: Arc<TopicCore>) -> Self {
-        let current = core.first();
-        Subscribe {
-            core,
-            current,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<M: Message> Iterator for Subscribe<M> {
-    type Item = Result<M, Box<dyn Error + Send + Sync>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let value = self.core.get(self.current);
-        if value.is_some() {
-            self.current += 1;
-        }
-        value.map(|v| Ok(serde_json::from_str::<M>(&v)?))
-    }
 }
 
 pub struct TopicCore {
     name: Arc<str>,
-    first: watch::Sender<u64>,
     last: watch::Sender<u64>,
     storage: StoragePort,
-    cache: Mutex<BTreeMap<u64, Arc<str>>>,
     atomic_publish: Mutex<()>,
 }
 
 impl TopicCore {
-    pub fn new(
-        topic: StorageTopic,
-        data: Vec<StorageItem>,
-        storage: StoragePort,
-    ) -> Arc<TopicCore> {
+    pub fn new(topic: StorageTopic, storage: StoragePort) -> Arc<TopicCore> {
         let topic_core = TopicCore {
             name: topic.name,
-            first: watch::Sender::new(topic.first),
             last: watch::Sender::new(topic.last),
             storage,
-            cache: Mutex::new(data.into_iter().map(|item| (item.seq, item.data)).collect()),
             atomic_publish: Mutex::new(()),
         };
         Arc::new(topic_core)
@@ -95,10 +53,8 @@ impl TopicCore {
     pub fn empty(name: Arc<str>, storage: StoragePort) -> Arc<TopicCore> {
         let topic_core = TopicCore {
             name,
-            first: watch::Sender::new(1),
             last: watch::Sender::new(0),
             storage,
-            cache: Mutex::new(BTreeMap::new()),
             atomic_publish: Mutex::new(()),
         };
         Arc::new(topic_core)
@@ -118,20 +74,8 @@ impl TopicCore {
             send,
         ))?;
         recv.blocking_recv()??;
-        // Save to cache
-        {
-            self.cache.lock().unwrap().insert(next, data);
-        }
         // Update last.
         self.last.send_replace(next);
         Ok(())
-    }
-
-    pub fn get(&self, seq: u64) -> Option<Arc<str>> {
-        self.cache.lock().unwrap().get(&seq).cloned()
-    }
-
-    pub fn first(&self) -> u64 {
-        *self.first.borrow()
     }
 }
