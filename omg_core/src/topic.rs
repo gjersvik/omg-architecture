@@ -20,7 +20,7 @@ pub struct Topic<M: Message> {
 }
 
 impl<M: Message> Topic<M> {
-    pub(crate) fn new(core: Arc<TopicCore>) -> Self {
+    pub fn new(core: Arc<TopicCore>) -> Self {
         Topic {
             core,
             _marker: PhantomData,
@@ -66,7 +66,7 @@ impl<M: Message> Iterator for Subscribe<M> {
     }
 }
 
-pub(crate) struct TopicCore {
+pub struct TopicCore {
     name: Arc<str>,
     first: watch::Sender<u64>,
     last: watch::Sender<u64>,

@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, env, error::Error, thread};
 
-use omg_core::{Agency, State, Topic, Handle, StorageEvent};
+use omg_core::{Handle, State, StorageEvent, Topic, TopicCore};
+use tokio::sync::oneshot;
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
@@ -105,10 +106,25 @@ fn inputs() -> TodoInput {
 }
 
 fn load(
-    storage: &Handle<StorageEvent>
+    storage: &Handle<StorageEvent>,
 ) -> Result<(Vec<TodoInput>, Topic<(u64, Option<String>)>), Box<dyn Error + Send + Sync>> {
-    let mut agency = Agency::load(storage.clone())?;
-    let topic = agency.create_topic("todo");
+    let (send, recv) = oneshot::channel();
+    storage.send(StorageEvent::Topics(send))?;
+    let topics = recv.blocking_recv()??;
+
+    let todo = topics
+        .into_iter()
+        .find(|topic| topic.name.as_ref() == "todo");
+    let core = if let Some(topic) = todo {
+        let (send, recv) = oneshot::channel();
+        storage.send(StorageEvent::ReadAll(topic.name.clone(), send))?;
+        let data = recv.blocking_recv()??;
+        TopicCore::new(topic, data, storage.clone())
+    } else {
+        TopicCore::empty("todo".into(), storage.clone())
+    };
+
+    let topic = Topic::new(core);
 
     let events = topic
         .subscribe()
