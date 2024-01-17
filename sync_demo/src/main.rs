@@ -6,13 +6,13 @@ use tokio::sync::oneshot;
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
     let (storage, _) = omg_sqlite::file("todo.db");
-    let (events, topic) = load(&storage)?;
+    let events = load(&storage)?;
 
     // setup the agent
     let (handle, mut agent) = Todo(BTreeMap::new()).agent();
     agent.add_callback(Box::new(move |event| match event {
         TodoOutput::PrintLine(msg) => println!("{msg}"),
-        TodoOutput::Publish(key, value) => publish(&topic, (key, value)),
+        TodoOutput::Publish(key, value) => publish(&storage, (key, value)),
     }));
     let join = thread::spawn(move || agent.block_until_done());
 
@@ -107,7 +107,7 @@ fn inputs() -> TodoInput {
 
 fn load(
     storage: &Handle<StorageEvent>,
-) -> Result<(Vec<TodoInput>, Topic<(u64, Option<String>)>), Box<dyn Error + Send + Sync>> {
+) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
     let (send, recv) = oneshot::channel();
     storage.send(StorageEvent::Topics(send))?;
     let topics = recv.blocking_recv()??;
@@ -130,9 +130,27 @@ fn load(
         .subscribe()
         .map(|msg| msg.map(|(key, value)| TodoInput::Load(key, value)))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok((events, topic))
+    Ok(events)
 }
 
-fn publish(topic: &Topic<(u64, Option<String>)>, data: (u64, Option<String>)) {
+fn publish(storage: &Handle<StorageEvent>, data: (u64, Option<String>)) {
+    let (send, recv) = oneshot::channel();
+    storage.send(StorageEvent::Topics(send)).unwrap();
+    let topics = recv.blocking_recv().unwrap().unwrap();
+
+    let todo = topics
+        .into_iter()
+        .find(|topic| topic.name.as_ref() == "todo");
+    let core = if let Some(topic) = todo {
+        let (send, recv) = oneshot::channel();
+        storage.send(StorageEvent::ReadAll(topic.name.clone(), send)).unwrap();
+        let data = recv.blocking_recv().unwrap().unwrap();
+        TopicCore::new(topic, data, storage.clone())
+    } else {
+        TopicCore::empty("todo".into(), storage.clone())
+    };
+
+    let topic = Topic::new(core);
+
     topic.publish(data).unwrap()
 }
