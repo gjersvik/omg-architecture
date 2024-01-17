@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let (handle, mut agent) = Todo(BTreeMap::new()).agent();
     agent.add_callback(Box::new(move |event| match event {
         TodoOutput::PrintLine(msg) => println!("{msg}"),
-        TodoOutput::Publish(key, value) => topic.publish((key, value)).unwrap(),
+        TodoOutput::Publish(key, value) => publish(&topic, (key, value)),
     }));
     let join = thread::spawn(move || agent.block_until_done());
 
@@ -131,4 +131,8 @@ fn load(
         .map(|msg| msg.map(|(key, value)| TodoInput::Load(key, value)))
         .collect::<Result<Vec<_>, _>>()?;
     Ok((events, topic))
+}
+
+fn publish(topic: &Topic<(u64, Option<String>)>, data: (u64, Option<String>)) {
+    topic.publish(data).unwrap()
 }
