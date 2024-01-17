@@ -5,10 +5,14 @@ use std::{
     thread,
 };
 
-use omg_core::{Agent, Handle, Service, StorageError, StorageInput, StorageItem, StorageTopic};
+use omg_core::{
+    Agent, Handle, Service, StorageError, StorageInput, StorageItem, StorageOutput, StorageTopic,
+};
 use sqlite::{Connection, State};
 
-pub fn file(path: impl Into<PathBuf>) -> (Handle<StorageInput>, impl Agent<Output = ()>) {
+pub fn file(
+    path: impl Into<PathBuf>,
+) -> (Handle<StorageInput>, impl Agent<Output = StorageOutput>) {
     Sqlite { path: path.into() }.agent()
 }
 
@@ -18,18 +22,36 @@ struct Sqlite {
 
 impl Service for Sqlite {
     type Input = StorageInput;
-    type Output = ();
+    type Output = StorageOutput;
 
-    fn create(&mut self, channel: Receiver<Self::Input>, _: Box<dyn Fn(Self::Output) + Send>) {
+    fn create(
+        &mut self,
+        channel: Receiver<Self::Input>,
+        callback: Box<dyn Fn(Self::Output) + Send>,
+    ) {
         let path = self.path.clone();
-        thread::spawn(move || backed(channel, path));
+        thread::spawn(move || backed(channel, path, callback));
     }
 }
 
-fn backed(events: Receiver<StorageInput>, path: PathBuf) {
-    let db = Connection::open(path).unwrap();
-    db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")
-        .unwrap();
+fn backed(
+    events: Receiver<StorageInput>,
+    path: PathBuf,
+    callback: Box<dyn Fn(StorageOutput) + Send>,
+) {
+    let db = match Connection::open(path) {
+        Ok(db) => db,
+        Err(err) => {
+            callback(StorageOutput::Error(err.into_storage_error()));
+            return;
+        }
+    };
+    if let Err(err) =
+        db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")
+    {
+        callback(StorageOutput::Error(err.into_storage_error()));
+        return;
+    }
 
     while let Ok(event) = events.recv() {
         match event {
@@ -100,12 +122,29 @@ fn read_all(
         .collect()
 }
 
-trait IntoStorageError<T> {
+trait IntoStorageError {
+    fn into_storage_error(self) -> StorageError;
+}
+
+impl IntoStorageError for Box<dyn Error + Send + Sync> {
+    fn into_storage_error(self) -> StorageError {
+        self.into()
+    }
+}
+
+impl IntoStorageError for sqlite::Error {
+    fn into_storage_error(self) -> StorageError {
+        let boxed: Box<dyn Error + Send + Sync> = self.into();
+        boxed.into()
+    }
+}
+
+trait IntoStorageResult<T> {
     fn into_storage_error(self) -> Result<T, StorageError>;
 }
 
-impl<T> IntoStorageError<T> for Result<T, Box<dyn Error + Send + Sync>> {
+impl<T, E: IntoStorageError> IntoStorageResult<T> for Result<T, E> {
     fn into_storage_error(self) -> Result<T, StorageError> {
-        self.map_err(Into::into)
+        self.map_err(IntoStorageError::into_storage_error)
     }
 }

@@ -30,6 +30,11 @@ pub enum StorageInput {
     ),
 }
 
+#[derive(Debug, Clone)]
+pub enum StorageOutput {
+    Error(StorageError),
+}
+
 #[derive(Error, Debug, Clone)]
 #[error(transparent)]
 pub struct StorageError(Arc<dyn Error + Send + Sync>);
