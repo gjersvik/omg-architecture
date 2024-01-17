@@ -1,14 +1,11 @@
 use std::{collections::BTreeMap, env, error::Error, thread};
 
-use omg_core::{Agency, State, Topic};
+use omg_core::{Agency, State, Topic, Handle, StorageEvent};
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
     let (storage, _) = omg_sqlite::file("todo.db");
-
-    let mut agency = Agency::load(storage)?;
-    let topic = agency.create_topic("todo");
-    let events = load(&topic)?;
+    let (events, topic) = load(&storage)?;
 
     // setup the agent
     let (handle, mut agent) = Todo(BTreeMap::new()).agent();
@@ -108,10 +105,14 @@ fn inputs() -> TodoInput {
 }
 
 fn load(
-    topic: &Topic<(u64, Option<String>)>,
-) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
-    topic
+    storage: &Handle<StorageEvent>
+) -> Result<(Vec<TodoInput>, Topic<(u64, Option<String>)>), Box<dyn Error + Send + Sync>> {
+    let mut agency = Agency::load(storage.clone())?;
+    let topic = agency.create_topic("todo");
+
+    let events = topic
         .subscribe()
         .map(|msg| msg.map(|(key, value)| TodoInput::Load(key, value)))
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((events, topic))
 }
