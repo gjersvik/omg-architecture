@@ -1,24 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use async_channel::{Receiver, SendError, Sender};
+use async_channel::{Receiver, Sender};
 
 #[derive(Debug)]
-pub struct Handle<T> {
-    channel: Sender<T>,
-}
-
-impl<T> Handle<T> {
-    pub fn send(&self, message: T) -> Result<(), SendError<T>> {
-        self.channel.send_blocking(message)
-    }
-}
-
-impl<T> Clone for Handle<T> {
-    fn clone(&self) -> Self {
-        Self {
-            channel: self.channel.clone(),
-        }
-    }
+pub struct Handle<In> {
+    pub input: Sender<In>,
 }
 
 pub trait Agent {
@@ -38,7 +24,7 @@ where
 
     fn agent(self) -> (Handle<Self::Input>, StateAgent<Self>) {
         let (sender, receiver) = async_channel::unbounded();
-        let handle = Handle { channel: sender };
+        let handle = Handle { input: sender };
 
         let agent: StateAgent<Self> = StateAgent {
             state: self,
@@ -98,7 +84,7 @@ where
 
     fn agent(mut self) -> (Handle<Self::Input>, ServiceAgent<Self>) {
         let (sender, receiver) = async_channel::unbounded();
-        let handle = Handle { channel: sender };
+        let handle = Handle { input: sender };
 
         let callbacks: ServiceCallback<Self::Output> = Arc::default();
         let callbacks_clone = callbacks.clone();

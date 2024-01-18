@@ -18,10 +18,10 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     //Publish messages
     for event in events {
-        handle.send(event)?;
+        handle.input.send_blocking(event)?;
     }
 
-    handle.send(inputs())?;
+    handle.input.send_blocking(inputs())?;
     mem::drop(handle);
 
     // Wait for runner thread.
@@ -108,7 +108,9 @@ fn inputs() -> TodoInput {
 
 fn load(storage: &Handle<StorageInput>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
     let (send, recv) = oneshot::channel();
-    storage.send(StorageInput::ReadAll("todo".into(), send))?;
+    storage
+        .input
+        .send_blocking(StorageInput::ReadAll("todo".into(), send))?;
     let data = recv.blocking_recv()??;
     data.into_iter()
         .map(|item| {
@@ -120,7 +122,10 @@ fn load(storage: &Handle<StorageInput>) -> Result<Vec<TodoInput>, Box<dyn Error 
 
 fn publish(storage: &Handle<StorageInput>, data: (u64, Option<String>)) {
     let (send, recv) = oneshot::channel();
-    storage.send(StorageInput::Topics(send)).unwrap();
+    storage
+        .input
+        .send_blocking(StorageInput::Topics(send))
+        .unwrap();
     let topics = recv.blocking_recv().unwrap().unwrap();
 
     let todo = topics
@@ -134,7 +139,8 @@ fn publish(storage: &Handle<StorageInput>, data: (u64, Option<String>)) {
 
     let (send, recv) = oneshot::channel();
     storage
-        .send(StorageInput::Push(
+        .input
+        .send_blocking(StorageInput::Push(
             "todo".into(),
             next_id,
             serde_json::to_string(&data).unwrap().into(),
