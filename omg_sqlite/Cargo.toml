@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 omg_core = { path = "../omg_core" }
 sqlite = "0.32.0"
+async-channel = "2.1.1"

@@ -1,7 +1,6 @@
-use std::sync::{
-    mpsc::{self, Receiver, SendError, Sender},
-    Arc, Mutex,
-};
+use std::sync::{Arc, Mutex};
+
+use async_channel::{Receiver, SendError, Sender};
 
 #[derive(Debug)]
 pub struct Handle<T> {
@@ -10,7 +9,7 @@ pub struct Handle<T> {
 
 impl<T> Handle<T> {
     pub fn send(&self, message: T) -> Result<(), SendError<T>> {
-        self.channel.send(message)
+        self.channel.send_blocking(message)
     }
 }
 
@@ -38,7 +37,7 @@ where
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output>;
 
     fn agent(self) -> (Handle<Self::Input>, StateAgent<Self>) {
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = async_channel::unbounded();
         let handle = Handle { channel: sender };
 
         let agent: StateAgent<Self> = StateAgent {
@@ -63,7 +62,7 @@ impl<S: State> StateAgent<S> {
     }
 
     pub fn block_until_done(mut self) {
-        while let Ok(msg) = self.channel.recv() {
+        while let Ok(msg) = self.channel.recv_blocking() {
             self.message(msg)
         }
     }
@@ -98,7 +97,7 @@ where
     );
 
     fn agent(mut self) -> (Handle<Self::Input>, ServiceAgent<Self>) {
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = async_channel::unbounded();
         let handle = Handle { channel: sender };
 
         let callbacks: ServiceCallback<Self::Output> = Arc::default();

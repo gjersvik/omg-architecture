@@ -1,10 +1,6 @@
-use std::{
-    error::Error,
-    path::PathBuf,
-    sync::{mpsc::Receiver, Arc},
-    thread,
-};
+use std::{error::Error, path::PathBuf, sync::Arc, thread};
 
+use async_channel::Receiver;
 use omg_core::{
     Agent, Handle, Service, StorageError, StorageInput, StorageItem, StorageOutput, StorageTopic,
 };
@@ -53,7 +49,7 @@ fn backed(
         return;
     }
 
-    while let Ok(event) = events.recv() {
+    while let Ok(event) = events.recv_blocking() {
         match event {
             StorageInput::Topics(reply) => {
                 let _ = reply.send(topics(&db).into_storage_error());
