@@ -1,11 +1,11 @@
 use std::{collections::BTreeMap, env, error::Error, mem, thread};
 
-use omg_core::{Handle, State, StorageInput};
+use omg_core::{Handle, State, StorageInput, StorageOutput};
 use tokio::sync::oneshot;
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
-    let (storage, _) = omg_sqlite::file("todo.db");
+    let storage = omg_sqlite::file("todo.db");
     let events = load(&storage)?;
 
     // setup the agent
@@ -106,7 +106,7 @@ fn inputs() -> TodoInput {
     }
 }
 
-fn load(storage: &Handle<StorageInput>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
+fn load(storage: &Handle<StorageInput, StorageOutput>) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
     let (send, recv) = oneshot::channel();
     storage
         .input
@@ -120,7 +120,7 @@ fn load(storage: &Handle<StorageInput>) -> Result<Vec<TodoInput>, Box<dyn Error 
         .collect()
 }
 
-fn publish(storage: &Handle<StorageInput>, data: (u64, Option<String>)) {
+fn publish(storage: &Handle<StorageInput, StorageOutput>, data: (u64, Option<String>)) {
     let (send, recv) = oneshot::channel();
     storage
         .input

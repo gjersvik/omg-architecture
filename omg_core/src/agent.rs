@@ -1,22 +1,27 @@
-use std::sync::{Arc, Mutex};
-
-use async_channel::{Receiver, Sender};
-
 #[derive(Debug, Clone)]
-pub struct Handle<In> {
-    pub input: Sender<In>,
+pub struct Handle<In, Out> {
+    pub input: async_channel::Sender<In>,
+    pub output: async_broadcast::Receiver<Out>,
 }
 
-pub struct Context<In> {
-    pub input: Receiver<In>
+pub struct Context<In, Out> {
+    pub input: async_channel::Receiver<In>,
+    pub output: async_broadcast::Sender<Out>,
 }
 
-pub fn handle<In>() -> (Handle<In>, Context<In>) {
-    let (sender, receiver) = async_channel::unbounded();
+pub fn handle<In, Out>(cap: usize) -> (Handle<In, Out>, Context<In, Out>) {
+    let (in_s, in_r) = async_channel::bounded(cap);
+    let (out_s, out_r) = async_broadcast::broadcast(cap);
 
     (
-        Handle{input: sender},
-        Context{input: receiver}
+        Handle {
+            input: in_s,
+            output: out_r,
+        },
+        Context {
+            input: in_r,
+            output: out_s,
+        },
     )
 }
 
@@ -35,8 +40,8 @@ where
 
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output>;
 
-    fn agent(self) -> (Handle<Self::Input>, StateAgent<Self>) {
-        let (handle, context) = handle();
+    fn agent(self) -> (Handle<Self::Input, Self::Output>, StateAgent<Self>) {
+        let (handle, context) = handle(64);
 
         let agent: StateAgent<Self> = StateAgent {
             state: self,
@@ -50,7 +55,7 @@ where
 
 pub struct StateAgent<S: State> {
     state: S,
-    context: Context<S::Input>,
+    context: Context<S::Input, S::Output>,
     callbacks: Vec<Box<dyn Fn(S::Output) + Send>>,
 }
 
@@ -76,56 +81,5 @@ impl<S: State> StateAgent<S> {
 
     pub fn add_callback(&mut self, callback: Box<dyn Fn(S::Output) + Send>) {
         self.callbacks.push(callback)
-    }
-}
-
-type ServiceCallback<T> = Arc<Mutex<Vec<Box<dyn Fn(T) + Send>>>>;
-
-pub trait Service
-where
-    Self: Sized,
-{
-    type Input;
-    type Output: Clone + Send + 'static;
-
-    fn create(
-        &mut self,
-        channel: Receiver<Self::Input>,
-        callback: Box<dyn Fn(Self::Output) + Send>,
-    );
-
-    fn agent(mut self) -> (Handle<Self::Input>, ServiceAgent<Self>) {
-        let (sender, receiver) = async_channel::unbounded();
-        let handle = Handle { input: sender };
-
-        let callbacks: ServiceCallback<Self::Output> = Arc::default();
-        let callbacks_clone = callbacks.clone();
-        let callback = move |msg: Self::Output| {
-            for callback in callbacks_clone.lock().unwrap().iter() {
-                callback(msg.clone());
-            }
-        };
-
-        self.create(receiver, Box::new(callback));
-
-        let agent = ServiceAgent {
-            _state: self,
-            _callbacks: callbacks,
-        };
-
-        (handle, agent)
-    }
-}
-
-pub struct ServiceAgent<S: Service> {
-    _state: S,
-    _callbacks: ServiceCallback<S::Output>,
-}
-
-impl<S: Service> Agent for ServiceAgent<S> {
-    type Output = S::Output;
-
-    fn add_callback(&mut self, _callback: Box<dyn Fn(S::Output) + Send>) {
-        todo!()
     }
 }

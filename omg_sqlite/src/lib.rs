@@ -1,55 +1,37 @@
 use std::{error::Error, path::PathBuf, sync::Arc, thread};
 
-use async_channel::Receiver;
+use futures_lite::future;
 use omg_core::{
-    Agent, Handle, Service, StorageError, StorageInput, StorageItem, StorageOutput, StorageTopic,
+    Handle, StorageError, StorageInput, StorageItem, StorageOutput, StorageTopic, handle, Context,
 };
 use sqlite::{Connection, State};
 
-pub fn file(
-    path: impl Into<PathBuf>,
-) -> (Handle<StorageInput>, impl Agent<Output = StorageOutput>) {
-    Sqlite { path: path.into() }.agent()
-}
-
-struct Sqlite {
-    path: PathBuf,
-}
-
-impl Service for Sqlite {
-    type Input = StorageInput;
-    type Output = StorageOutput;
-
-    fn create(
-        &mut self,
-        channel: Receiver<Self::Input>,
-        callback: Box<dyn Fn(Self::Output) + Send>,
-    ) {
-        let path = self.path.clone();
-        thread::spawn(move || backed(channel, path, callback));
-    }
+pub fn file(path: impl Into<PathBuf>) -> Handle<StorageInput, StorageOutput> {
+    let (handle, context) = handle(8);
+    let path = path.into();
+    thread::spawn(move || backed(context, path));
+    handle
 }
 
 fn backed(
-    events: Receiver<StorageInput>,
+    context: Context<StorageInput, StorageOutput>,
     path: PathBuf,
-    callback: Box<dyn Fn(StorageOutput) + Send>,
 ) {
     let db = match Connection::open(path) {
         Ok(db) => db,
         Err(err) => {
-            callback(StorageOutput::Error(err.into_storage_error()));
+            let _ = future::block_on(context.output.broadcast(StorageOutput::Error(err.into_storage_error())));
             return;
         }
     };
     if let Err(err) =
         db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")
     {
-        callback(StorageOutput::Error(err.into_storage_error()));
+        let _ = future::block_on(context.output.broadcast(StorageOutput::Error(err.into_storage_error())));
         return;
     }
 
-    while let Ok(event) = events.recv_blocking() {
+    while let Ok(event) = context.input.recv_blocking() {
         match event {
             StorageInput::Topics(reply) => {
                 let _ = reply.send(topics(&db).into_storage_error());
