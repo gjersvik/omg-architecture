@@ -6,12 +6,18 @@ pub struct Handle<In, Out> {
     pub output: async_broadcast::Receiver<Out>,
 }
 
-pub struct Context<In, Out> {
+pub struct Context<In, Out: Clone> {
     pub input: async_channel::Receiver<In>,
-    pub output: async_broadcast::Sender<Out>,
+    output: async_broadcast::Sender<Out>,
 }
 
-pub fn handle<In, Out>(cap: usize) -> (Handle<In, Out>, Context<In, Out>) {
+impl<In, Out: Clone> Context<In, Out> {
+    pub async fn push(&self, value: Out) -> bool {
+        self.output.broadcast_direct(value).await.is_err()
+    } 
+}
+
+pub fn handle<In, Out: Clone>(cap: usize) -> (Handle<In, Out>, Context<In, Out>) {
     let (in_s, in_r) = async_channel::bounded(cap);
     let (out_s, out_r) = async_broadcast::broadcast(cap);
 
@@ -67,7 +73,7 @@ impl<S: State> StateAgent<S> {
     fn message(&mut self, msg: S::Input) {
         let output = self.state.handle(msg);
         for event in output {
-            let _ = future::block_on(self.context.output.broadcast(event));
+            let _ = future::block_on(self.context.push(event));
         }
     }
 }

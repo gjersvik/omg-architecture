@@ -20,14 +20,14 @@ fn backed(
     let db = match Connection::open(path) {
         Ok(db) => db,
         Err(err) => {
-            let _ = future::block_on(context.output.broadcast(StorageOutput::Error(err.into_storage_error())));
+            let _ = future::block_on(context.push(StorageOutput::Error(err.into_storage_error())));
             return;
         }
     };
     if let Err(err) =
         db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")
     {
-        let _ = future::block_on(context.output.broadcast(StorageOutput::Error(err.into_storage_error())));
+        let _ = future::block_on(context.push(StorageOutput::Error(err.into_storage_error())));
         return;
     }
 
