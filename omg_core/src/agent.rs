@@ -25,12 +25,6 @@ pub fn handle<In, Out>(cap: usize) -> (Handle<In, Out>, Context<In, Out>) {
     )
 }
 
-pub trait Agent {
-    type Output: Clone + Send + 'static;
-
-    fn add_callback(&mut self, callback: Box<dyn Fn(Self::Output) + Send>);
-}
-
 pub trait State
 where
     Self: Sized,
