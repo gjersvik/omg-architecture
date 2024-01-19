@@ -1,26 +1,29 @@
 use std::{collections::BTreeMap, env, error::Error, thread};
 
-use omg_core::{Agent, Handle, State, StorageInput, StorageOutput};
+use omg_core::{Agent, State, StorageInput, WriteHandle};
 use tokio::sync::oneshot;
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup the environment
-    let storage = omg_sqlite::file("todo.db");
+    let storage = omg_sqlite::file("todo.db").write_only();
     let events = load(&storage)?;
 
     // setup the agent
-    let (mut handle, agent) = Todo(BTreeMap::new()).agent();
+    let (handle, agent) = Todo(BTreeMap::new()).agent();
     thread::spawn(move || agent.run_blocking());
+
+    let (mut reader, writer) = handle.split();
 
     //Publish messages
     for event in events {
-        handle.write_blocking(event)?;
+        writer.write_blocking(event)?;
     }
 
-    handle.write_blocking(inputs())?;
+    writer.write_blocking(inputs())?;
+    drop(writer);
 
     // Handle outputs;
-    while let Ok(event) = handle.read_blocking() {
+    while let Ok(event) = reader.read_blocking() {
         match event {
             TodoOutput::PrintLine(msg) => println!("{msg}"),
             TodoOutput::Publish(key, value) => publish(&storage, (key, value)),
@@ -107,7 +110,7 @@ fn inputs() -> TodoInput {
 }
 
 fn load(
-    storage: &Handle<StorageInput, StorageOutput>,
+    storage: &WriteHandle<StorageInput>,
 ) -> Result<Vec<TodoInput>, Box<dyn Error + Send + Sync>> {
     let (send, recv) = oneshot::channel();
     storage.write_blocking(StorageInput::ReadAll("todo".into(), send))?;
@@ -120,7 +123,7 @@ fn load(
         .collect()
 }
 
-fn publish(storage: &Handle<StorageInput, StorageOutput>, data: (u64, Option<String>)) {
+fn publish(storage: &WriteHandle<StorageInput>, data: (u64, Option<String>)) {
     let (send, recv) = oneshot::channel();
     storage.write_blocking(StorageInput::Topics(send)).unwrap();
     let topics = recv.blocking_recv().unwrap().unwrap();
