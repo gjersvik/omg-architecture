@@ -31,7 +31,7 @@ fn backed(
         return;
     }
 
-    while let Ok(event) = context.input.recv_blocking() {
+    while let Some(event) = future::block_on(context.pop()) {
         match event {
             StorageInput::Topics(reply) => {
                 let _ = reply.send(topics(&db).into_storage_error());

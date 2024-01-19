@@ -7,14 +7,18 @@ pub struct Handle<In, Out> {
 }
 
 pub struct Context<In, Out: Clone> {
-    pub input: async_channel::Receiver<In>,
+    input: async_channel::Receiver<In>,
     output: async_broadcast::Sender<Out>,
 }
 
 impl<In, Out: Clone> Context<In, Out> {
     pub async fn push(&self, value: Out) -> bool {
         self.output.broadcast_direct(value).await.is_err()
-    } 
+    }
+
+    pub async fn pop(&self) -> Option<In> {
+        self.input.recv().await.ok()
+    }
 }
 
 pub fn handle<In, Out: Clone>(cap: usize) -> (Handle<In, Out>, Context<In, Out>) {
@@ -66,7 +70,7 @@ impl<S: State> StateAgent<S> {
 
     pub fn block_until_done(mut self) {
         future::block_on(async {
-            while let Ok(msg) = self.context.input.recv().await {
+            while let Some(msg) = self.context.pop().await {
                 self.message(msg).await
             }
         });
