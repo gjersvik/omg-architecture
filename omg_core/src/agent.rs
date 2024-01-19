@@ -10,6 +10,14 @@ pub struct Handle<In, Out: Clone> {
 }
 
 impl<In, Out: Clone> Handle<In, Out> {
+    pub fn new_handle(&self) -> Handle<In, Out> {
+        Handle {
+            input: self.input.clone(),
+            inactive: self.inactive.clone(),
+            output: None,
+        }
+    }
+
     pub async fn write(&self, msg: In) -> Result<(), SendError<In>> {
         self.input.send(msg).await
     }
