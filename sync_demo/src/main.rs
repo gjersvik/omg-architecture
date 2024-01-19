@@ -1,5 +1,6 @@
-use std::{collections::BTreeMap, env, error::Error, mem, thread};
+use std::{collections::BTreeMap, env, error::Error, thread};
 
+use futures_lite::future;
 use omg_core::{Handle, State, StorageInput, StorageOutput};
 use tokio::sync::oneshot;
 
@@ -9,12 +10,8 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let events = load(&storage)?;
 
     // setup the agent
-    let (handle, mut agent) = Todo(BTreeMap::new()).agent();
-    agent.add_callback(Box::new(move |event| match event {
-        TodoOutput::PrintLine(msg) => println!("{msg}"),
-        TodoOutput::Publish(key, value) => publish(&storage, (key, value)),
-    }));
-    let join = thread::spawn(move || agent.block_until_done());
+    let (mut handle, agent) = Todo(BTreeMap::new()).agent();
+    thread::spawn(move || agent.block_until_done());
 
     //Publish messages
     for event in events {
@@ -22,10 +19,14 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     handle.input.send_blocking(inputs())?;
-    mem::drop(handle);
 
-    // Wait for runner thread.
-    let _ = join.join();
+    // Handle outputs;
+    while let Ok(event) = future::block_on(handle.output.recv()) {
+        match event {
+            TodoOutput::PrintLine(msg) => println!("{msg}"),
+            TodoOutput::Publish(key, value) => publish(&storage, (key, value)),
+        }
+    }
     Ok(())
 }
 

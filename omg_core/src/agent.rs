@@ -1,3 +1,5 @@
+use futures_lite::future;
+
 #[derive(Debug, Clone)]
 pub struct Handle<In, Out> {
     pub input: async_channel::Sender<In>,
@@ -39,8 +41,7 @@ where
 
         let agent: StateAgent<Self> = StateAgent {
             state: self,
-            context,
-            callbacks: Vec::new(),
+            context
         };
 
         (handle, agent)
@@ -49,8 +50,7 @@ where
 
 pub struct StateAgent<S: State> {
     state: S,
-    context: Context<S::Input, S::Output>,
-    callbacks: Vec<Box<dyn Fn(S::Output) + Send>>,
+    context: Context<S::Input, S::Output>
 }
 
 impl<S: State> StateAgent<S> {
@@ -67,13 +67,7 @@ impl<S: State> StateAgent<S> {
     fn message(&mut self, msg: S::Input) {
         let output = self.state.handle(msg);
         for event in output {
-            for callback in self.callbacks.iter() {
-                callback(event.clone());
-            }
+            let _ = future::block_on(self.context.output.broadcast(event));
         }
-    }
-
-    pub fn add_callback(&mut self, callback: Box<dyn Fn(S::Output) + Send>) {
-        self.callbacks.push(callback)
     }
 }
