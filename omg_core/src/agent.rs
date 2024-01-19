@@ -65,15 +65,17 @@ impl<S: State> StateAgent<S> {
     }
 
     pub fn block_until_done(mut self) {
-        while let Ok(msg) = self.context.input.recv_blocking() {
-            self.message(msg)
-        }
+        future::block_on(async {
+            while let Ok(msg) = self.context.input.recv().await {
+                self.message(msg).await
+            }
+        });
     }
 
-    fn message(&mut self, msg: S::Input) {
+    async fn message(&mut self, msg: S::Input) {
         let output = self.state.handle(msg);
         for event in output {
-            let _ = future::block_on(self.context.push(event));
+            let _ = self.context.push(event).await;
         }
     }
 }
