@@ -1,14 +1,14 @@
 use futures_lite::future;
 
-pub use async_channel::{SendError, TrySendError};
+pub use async_channel::{SendError, TrySendError, RecvError, TryRecvError};
 
 #[derive(Debug, Clone)]
-pub struct Handle<In, Out> {
+pub struct Handle<In, Out: Clone> {
     input: async_channel::Sender<In>,
-    pub output: async_broadcast::Receiver<Out>,
+    output: async_broadcast::Receiver<Out>,
 }
 
-impl<In, Out> Handle<In, Out> {
+impl<In, Out: Clone> Handle<In, Out> {
     pub async fn write(&self, msg: In) -> Result<(), SendError<In>> {
         self.input.send(msg).await
     }
@@ -19,6 +19,25 @@ impl<In, Out> Handle<In, Out> {
 
     pub fn write_blocking(&self, msg: In) -> Result<(), SendError<In>> {
         self.input.send_blocking(msg)
+    }
+
+    pub async fn read(&mut self) -> Result<Out, RecvError> {
+        self.output.recv_direct().await.map_err(|err| match err {
+            async_broadcast::RecvError::Overflowed(_) => panic!("Bug: Handle should not overflow. The agent must wait."),
+            async_broadcast::RecvError::Closed => RecvError,
+        } )
+    }
+    
+    pub fn try_read(&mut self) -> Result<Out, TryRecvError> {
+        self.output.try_recv().map_err(|err| match err {
+            async_broadcast::TryRecvError::Overflowed(_) => panic!("Bug: Handle should not overflow. The agent must wait."),
+            async_broadcast::TryRecvError::Empty => TryRecvError::Empty,
+            async_broadcast::TryRecvError::Closed => TryRecvError::Closed,
+        })
+    }
+
+    pub fn read_blocking(&mut self) -> Result<Out, RecvError> {
+        future::block_on(self.read())
     }
 }
 

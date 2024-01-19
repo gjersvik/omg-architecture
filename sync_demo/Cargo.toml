@@ -10,4 +10,3 @@ omg_core = { path = "../omg_core" }
 omg_sqlite = { path = "../omg_sqlite" }
 tokio = { version = "1", default-features = false, features = ["sync"]}
 serde_json = "1.0"
-futures-lite = "2.2.0"

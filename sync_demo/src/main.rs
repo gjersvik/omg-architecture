@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, env, error::Error, thread};
 
-use futures_lite::future;
 use omg_core::{Handle, State, StorageInput, StorageOutput};
 use tokio::sync::oneshot;
 
@@ -21,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     handle.write_blocking(inputs())?;
 
     // Handle outputs;
-    while let Ok(event) = future::block_on(handle.output.recv()) {
+    while let Ok(event) = handle.read_blocking() {
         match event {
             TodoOutput::PrintLine(msg) => println!("{msg}"),
             TodoOutput::Publish(key, value) => publish(&storage, (key, value)),
