@@ -1,11 +1,12 @@
 use futures_lite::future;
 
-pub use async_channel::{SendError, TrySendError, RecvError, TryRecvError};
+pub use async_channel::{RecvError, SendError, TryRecvError, TrySendError};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Handle<In, Out: Clone> {
     input: async_channel::Sender<In>,
-    output: async_broadcast::Receiver<Out>,
+    inactive: async_broadcast::InactiveReceiver<Out>,
+    output: Option<async_broadcast::Receiver<Out>>,
 }
 
 impl<In, Out: Clone> Handle<In, Out> {
@@ -22,15 +23,19 @@ impl<In, Out: Clone> Handle<In, Out> {
     }
 
     pub async fn read(&mut self) -> Result<Out, RecvError> {
-        self.output.recv_direct().await.map_err(|err| match err {
-            async_broadcast::RecvError::Overflowed(_) => panic!("Bug: Handle should not overflow. The agent must wait."),
+        self.output().recv_direct().await.map_err(|err| match err {
+            async_broadcast::RecvError::Overflowed(_) => {
+                panic!("Bug: Handle should not overflow. The agent must wait.")
+            }
             async_broadcast::RecvError::Closed => RecvError,
-        } )
+        })
     }
-    
+
     pub fn try_read(&mut self) -> Result<Out, TryRecvError> {
-        self.output.try_recv().map_err(|err| match err {
-            async_broadcast::TryRecvError::Overflowed(_) => panic!("Bug: Handle should not overflow. The agent must wait."),
+        self.output().try_recv().map_err(|err| match err {
+            async_broadcast::TryRecvError::Overflowed(_) => {
+                panic!("Bug: Handle should not overflow. The agent must wait.")
+            }
             async_broadcast::TryRecvError::Empty => TryRecvError::Empty,
             async_broadcast::TryRecvError::Closed => TryRecvError::Closed,
         })
@@ -38,6 +43,15 @@ impl<In, Out: Clone> Handle<In, Out> {
 
     pub fn read_blocking(&mut self) -> Result<Out, RecvError> {
         future::block_on(self.read())
+    }
+
+    fn output(&mut self) -> &mut async_broadcast::Receiver<Out> {
+        if self.output.is_none() {
+            self.output = Some(self.inactive.activate_cloned());
+        }
+        self.output
+            .as_mut()
+            .expect("Bug: It should have been impassible for self.option to be None here.")
     }
 }
 
@@ -63,7 +77,8 @@ pub fn handle<In, Out: Clone>(cap: usize) -> (Handle<In, Out>, Context<In, Out>)
     (
         Handle {
             input: in_s,
-            output: out_r,
+            inactive: out_r.deactivate(),
+            output: None,
         },
         Context {
             input: in_r,
