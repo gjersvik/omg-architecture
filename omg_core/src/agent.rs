@@ -1,9 +1,25 @@
 use futures_lite::future;
 
+pub use async_channel::{SendError, TrySendError};
+
 #[derive(Debug, Clone)]
 pub struct Handle<In, Out> {
-    pub input: async_channel::Sender<In>,
+    input: async_channel::Sender<In>,
     pub output: async_broadcast::Receiver<Out>,
+}
+
+impl<In, Out> Handle<In, Out> {
+    pub async fn write(&self, msg: In) -> Result<(), SendError<In>> {
+        self.input.send(msg).await
+    }
+
+    pub fn try_write(&self, msg: In) -> Result<(), TrySendError<In>> {
+        self.input.try_send(msg)
+    }
+
+    pub fn write_blocking(&self, msg: In) -> Result<(), SendError<In>> {
+        self.input.send_blocking(msg)
+    }
 }
 
 pub struct Context<In, Out: Clone> {
@@ -51,7 +67,7 @@ where
 
         let agent: StateAgent<Self> = StateAgent {
             state: self,
-            context
+            context,
         };
 
         (handle, agent)
@@ -60,7 +76,7 @@ where
 
 pub struct StateAgent<S: State> {
     state: S,
-    context: Context<S::Input, S::Output>
+    context: Context<S::Input, S::Output>,
 }
 
 impl<S: State> StateAgent<S> {
