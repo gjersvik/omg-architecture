@@ -2,9 +2,22 @@ use std::sync::{Arc, Mutex};
 
 use async_channel::{Receiver, Sender};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Handle<In> {
     pub input: Sender<In>,
+}
+
+pub struct Context<In> {
+    pub input: Receiver<In>
+}
+
+pub fn handle<In>() -> (Handle<In>, Context<In>) {
+    let (sender, receiver) = async_channel::unbounded();
+
+    (
+        Handle{input: sender},
+        Context{input: receiver}
+    )
 }
 
 pub trait Agent {
@@ -23,12 +36,11 @@ where
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output>;
 
     fn agent(self) -> (Handle<Self::Input>, StateAgent<Self>) {
-        let (sender, receiver) = async_channel::unbounded();
-        let handle = Handle { input: sender };
+        let (handle, context) = handle();
 
         let agent: StateAgent<Self> = StateAgent {
             state: self,
-            channel: receiver,
+            context,
             callbacks: Vec::new(),
         };
 
@@ -38,7 +50,7 @@ where
 
 pub struct StateAgent<S: State> {
     state: S,
-    channel: Receiver<S::Input>,
+    context: Context<S::Input>,
     callbacks: Vec<Box<dyn Fn(S::Output) + Send>>,
 }
 
@@ -48,7 +60,7 @@ impl<S: State> StateAgent<S> {
     }
 
     pub fn block_until_done(mut self) {
-        while let Ok(msg) = self.channel.recv_blocking() {
+        while let Ok(msg) = self.context.input.recv_blocking() {
             self.message(msg)
         }
     }
