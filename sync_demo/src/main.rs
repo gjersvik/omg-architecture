@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, env, error::Error, thread};
 
-use omg_core::{Handle, State, StorageInput, StorageOutput};
+use omg_core::{Agent, Handle, State, StorageInput, StorageOutput};
 use tokio::sync::oneshot;
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     // setup the agent
     let (mut handle, agent) = Todo(BTreeMap::new()).agent();
-    thread::spawn(move || agent.block_until_done());
+    thread::spawn(move || agent.run_blocking());
 
     //Publish messages
     for event in events {

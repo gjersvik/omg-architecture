@@ -1,13 +1,28 @@
-use futures_lite::future;
+use futures_lite::{future, Future};
 
 use crate::{Context, Handle};
 
+pub trait Agent
+where
+    Self: Sized + Send,
+{
+    fn tick(&mut self) -> impl Future<Output = bool> + Send;
+
+    fn run(mut self) -> impl Future<Output = ()> + Send {
+        async move { while self.tick().await {} }
+    }
+
+    fn run_blocking(self) {
+        future::block_on(self.run())
+    }
+}
+
 pub trait State
 where
-    Self: Sized,
+    Self: Sized + Send,
 {
-    type Input;
-    type Output: Clone + Send;
+    type Input: Send;
+    type Output: Clone + Send + Sync;
 
     fn handle(&mut self, msg: Self::Input) -> Vec<Self::Output>;
 
@@ -32,19 +47,18 @@ impl<S: State> StateAgent<S> {
     pub fn state(&self) -> &S {
         &self.state
     }
+}
 
-    pub fn block_until_done(mut self) {
-        future::block_on(async {
-            while let Some(msg) = self.context.pop().await {
-                self.message(msg).await
+impl<S: State> Agent for StateAgent<S> {
+    async fn tick(&mut self) -> bool {
+        if let Some(msg) = self.context.pop().await {
+            let output = self.state.handle(msg);
+            for event in output {
+                let _ = self.context.push(event).await;
             }
-        });
-    }
-
-    async fn message(&mut self, msg: S::Input) {
-        let output = self.state.handle(msg);
-        for event in output {
-            let _ = self.context.push(event).await;
+            true
+        } else {
+            false
         }
     }
 }
