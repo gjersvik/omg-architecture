@@ -90,12 +90,20 @@ pub struct Context<In, Out: Clone> {
 }
 
 impl<In, Out: Clone> Context<In, Out> {
-    pub async fn push(&self, value: Out) -> bool {
-        self.output.broadcast_direct(value).await.is_err()
+    pub async fn push(&self, value: Out) {
+        let _ = self.output.broadcast_direct(value).await;
+    }
+
+    pub fn push_blocking(&self, value: Out) {
+        let _ = future::block_on(self.output.broadcast_direct(value));
     }
 
     pub async fn pop(&self) -> Option<In> {
         self.input.recv().await.ok()
+    }
+
+    pub fn pop_blocking(&self) -> Option<In> {
+        self.input.recv_blocking().ok()
     }
 }
 

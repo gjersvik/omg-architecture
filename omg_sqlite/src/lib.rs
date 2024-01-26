@@ -1,6 +1,5 @@
 use std::{error::Error, path::PathBuf, sync::Arc, thread};
 
-use futures_lite::future;
 use omg_core::{
     Handle, StorageError, StorageInput, StorageItem, StorageOutput, StorageTopic, handle, Context,
 };
@@ -20,18 +19,18 @@ fn backed(
     let db = match Connection::open(path) {
         Ok(db) => db,
         Err(err) => {
-            let _ = future::block_on(context.push(StorageOutput::Error(err.into_storage_error())));
+            context.push_blocking(StorageOutput::Error(err.into_storage_error()));
             return;
         }
     };
     if let Err(err) =
         db.execute("CREATE TABLE IF NOT EXISTS messages (topic TEXT, seq INTEGER, data TEXT)")
     {
-        let _ = future::block_on(context.push(StorageOutput::Error(err.into_storage_error())));
+        context.push_blocking(StorageOutput::Error(err.into_storage_error()));
         return;
     }
 
-    while let Some(event) = future::block_on(context.pop()) {
+    while let Some(event) = context.pop_blocking() {
         match event {
             StorageInput::Topics(reply) => {
                 let _ = reply.send(topics(&db).into_storage_error());
